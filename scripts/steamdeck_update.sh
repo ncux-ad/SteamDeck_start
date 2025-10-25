@@ -36,7 +36,6 @@ REPO_URL="https://github.com/ncux-ad/SteamDeck_start.git"
 
 # Определяем текущее местоположение утилиты
 CURRENT_DIR=$(dirname "$(readlink -f "$0")")
-BACKUP_DIR="${INSTALL_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
 TEMP_DIR="/tmp/steamdeck_update"
 
 # Функция для получения версии
@@ -214,7 +213,7 @@ update_utility() {
     pkill -f "steamdeck_gui.py" 2>/dev/null || true
     
     # Создаем резервную копию
-    create_backup "$INSTALL_DIR" "$BACKUP_DIR"
+    create_backup "$INSTALL_DIR" ""
     
     # Копируем новые файлы
     print_message "Установка обновления..."
@@ -252,11 +251,21 @@ update_utility() {
         print_message "Копирование новой версии в установленную директорию..."
         if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
             print_message "Копирование новой версии без sudo..."
-            cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+            if cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"; then
+                print_success "Копирование завершено успешно"
+            else
+                print_error "Ошибка при копировании файлов"
+                return 1
+            fi
         else
             print_message "Требуются права администратора для копирования новой версии..."
             if sudo -n true 2>/dev/null; then
-                sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+                if sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"; then
+                    print_success "Копирование завершено успешно"
+                else
+                    print_error "Ошибка при копировании файлов с sudo"
+                    return 1
+                fi
             else
                 print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
                 print_error "sudo bash scripts/steamdeck_update.sh update"
@@ -295,11 +304,21 @@ update_utility() {
         print_message "Проверка прав доступа для копирования новой версии..."
         if [[ -w "$PROJECT_ROOT" ]]; then
             print_message "Копирование новой версии без sudo..."
-            cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"
+            if cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"; then
+                print_success "Копирование завершено успешно"
+            else
+                print_error "Ошибка при копировании файлов"
+                return 1
+            fi
         else
             print_message "Требуются права администратора для копирования новой версии..."
             if sudo -n true 2>/dev/null; then
-                sudo cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"
+                if sudo cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"; then
+                    print_success "Копирование завершено успешно"
+                else
+                    print_error "Ошибка при копировании файлов с sudo"
+                    return 1
+                fi
             else
                 print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
                 print_error "sudo bash scripts/steamdeck_update.sh update"
@@ -315,9 +334,17 @@ update_utility() {
     # Восстанавливаем пользовательские настройки
     if [[ -d "$TEMP_DIR/user_config" ]]; then
         if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
-            cp -r "$TEMP_DIR/user_config" "$INSTALL_DIR/"
+            if cp -r "$TEMP_DIR/user_config" "$INSTALL_DIR/"; then
+                print_success "Пользовательские настройки восстановлены"
+            else
+                print_warning "Не удалось восстановить пользовательские настройки"
+            fi
         elif [[ -d "$PROJECT_ROOT" ]]; then
-            cp -r "$TEMP_DIR/user_config" "$PROJECT_ROOT/"
+            if cp -r "$TEMP_DIR/user_config" "$PROJECT_ROOT/"; then
+                print_success "Пользовательские настройки восстановлены"
+            else
+                print_warning "Не удалось восстановить пользовательские настройки"
+            fi
         fi
     fi
     
@@ -371,7 +398,67 @@ update_utility() {
     # Очищаем временную папку
     rm -rf "$TEMP_DIR"
     
+    # Проверяем целостность обновления
+    verify_update_integrity
+    
     print_success "Обновление завершено!"
+}
+
+# Функция для проверки целостности обновления
+verify_update_integrity() {
+    print_message "Проверка целостности обновления..."
+    
+    local target_dir=""
+    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
+        target_dir="$INSTALL_DIR"
+    elif [[ -d "$PROJECT_ROOT" ]]; then
+        target_dir="$PROJECT_ROOT"
+    else
+        print_error "Не найдена директория для проверки"
+        return 1
+    fi
+    
+    # Проверяем ключевые файлы
+    local key_files=(
+        "VERSION"
+        "scripts/steamdeck_update.sh"
+        "scripts/steamdeck_gui.py"
+        "scripts/steamdeck_setup.sh"
+        "README.md"
+    )
+    
+    local failed_files=()
+    
+    for file in "${key_files[@]}"; do
+        if [[ ! -f "$target_dir/$file" ]]; then
+            failed_files+=("$file")
+            print_error "Отсутствует файл: $file"
+        else
+            print_success "Файл найден: $file"
+        fi
+    done
+    
+    if [[ ${#failed_files[@]} -gt 0 ]]; then
+        print_error "Обновление неполное! Отсутствуют файлы:"
+        for file in "${failed_files[@]}"; do
+            print_error "  - $file"
+        done
+        return 1
+    fi
+    
+    # Проверяем версию
+    local current_version=$(get_current_version)
+    local latest_version=$(get_latest_version)
+    
+    if [[ "$current_version" == "$latest_version" ]]; then
+        print_success "Версия соответствует ожидаемой: $current_version"
+    else
+        print_error "Несоответствие версий! Текущая: $current_version, Ожидаемая: $latest_version"
+        return 1
+    fi
+    
+    print_success "Проверка целостности пройдена успешно"
+    return 0
 }
 
 # Функция для проверки обновлений
@@ -399,29 +486,96 @@ check_updates() {
 rollback_update() {
     print_header "ОТКАТ ОБНОВЛЕНИЯ"
     
-    if [[ -d "$BACKUP_DIR" ]]; then
-        print_message "Восстановление из резервной копии..."
-        
-        # Останавливаем GUI
-        pkill -f "steamdeck_gui.py" 2>/dev/null || true
-        
-        # Удаляем текущую версию
-        rm -rf "$INSTALL_DIR"
-        
-        # Восстанавливаем из бэкапа
-        mv "$BACKUP_DIR" "$INSTALL_DIR"
-        
-        # Восстанавливаем права доступа
-        chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
+    # Ищем резервные копии
+    local backup_dirs=()
+    
+    # Ищем в директории установленной утилиты
+    if [[ -d "$INSTALL_DIR" ]]; then
+        backup_dirs+=($(dirname "$INSTALL_DIR")/SteamDeck_backup_*)
+    fi
+    
+    # Ищем в директории проекта (для флешки)
+    if [[ -d "$PROJECT_ROOT" ]]; then
+        backup_dirs+=($(dirname "$PROJECT_ROOT")/SteamDeck_backup_*)
+    fi
+    
+    # Ищем в домашней директории пользователя
+    backup_dirs+=($HOME/SteamDeck_backup_*)
+    
+    # Фильтруем только существующие директории
+    local existing_backups=()
+    for backup_dir in "${backup_dirs[@]}"; do
+        if [[ -d "$backup_dir" ]]; then
+            existing_backups+=("$backup_dir")
+        fi
+    done
+    
+    if [[ ${#existing_backups[@]} -eq 0 ]]; then
+        print_error "Резервные копии не найдены"
+        print_message "Искал в:"
+        for backup_dir in "${backup_dirs[@]}"; do
+            print_message "  - $backup_dir"
+        done
+        return 1
+    fi
+    
+    # Выбираем самую новую резервную копию
+    local latest_backup=""
+    for backup_dir in "${existing_backups[@]}"; do
+        if [[ -z "$latest_backup" ]] || [[ "$backup_dir" -nt "$latest_backup" ]]; then
+            latest_backup="$backup_dir"
+        fi
+    done
+    
+    print_message "Найдена резервная копия: $latest_backup"
+    
+    # Определяем, куда восстанавливать
+    local restore_target=""
+    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
+        restore_target="$INSTALL_DIR"
+    elif [[ -d "$PROJECT_ROOT" ]]; then
+        restore_target="$PROJECT_ROOT"
+    else
+        print_error "Не найдена директория для восстановления"
+        return 1
+    fi
+    
+    print_message "Восстановление из резервной копии..."
+    
+    # Останавливаем GUI
+    pkill -f "steamdeck_gui.py" 2>/dev/null || true
+    
+    # Удаляем текущую версию
+    if [[ -w "$restore_target" ]]; then
+        rm -rf "$restore_target"
+    else
+        sudo rm -rf "$restore_target"
+    fi
+    
+    # Восстанавливаем из бэкапа
+    cp -r "$latest_backup" "$restore_target"
+    
+    # Восстанавливаем права доступа
+    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
+        if id "$DECK_USER" &>/dev/null; then
+            chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
+        fi
         chmod -R 755 "$INSTALL_DIR"
         chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
         chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
-        
-        print_success "Откат завершен"
-    else
-        print_error "Резервная копия не найдена: $BACKUP_DIR"
-        return 1
+    elif [[ -d "$PROJECT_ROOT" ]]; then
+        if [[ -w "$PROJECT_ROOT" ]]; then
+            chmod -R 755 "$PROJECT_ROOT"
+            chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
+            chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
+        else
+            sudo chmod -R 755 "$PROJECT_ROOT"
+            sudo chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
+            sudo chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
+        fi
     fi
+    
+    print_success "Откат завершен!"
 }
 
 # Функция для показа статуса
