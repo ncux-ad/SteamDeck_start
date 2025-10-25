@@ -14,8 +14,13 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Определяем текущую директорию скрипта (глобально)
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Загружаем конфигурацию если существует
-CONFIG_FILE="$(dirname "$(dirname "$(readlink -f "$0")")")/config.env"
+CONFIG_FILE="$PROJECT_ROOT/config.env"
 if [[ -f "$CONFIG_FILE" ]]; then
     source "$CONFIG_FILE"
     print_message "Загружена конфигурация из $CONFIG_FILE"
@@ -161,21 +166,14 @@ create_backup() {
     print_message "Создание резервной копии текущей версии..."
     print_debug "install_dir: $install_dir"
     print_debug "backup_dir: $backup_dir"
+    print_debug "PROJECT_ROOT: $PROJECT_ROOT"
     
-    # Определяем текущую директорию проекта
-    local script_path="$(readlink -f "$0")"
-    local script_dir="$(dirname "$script_path")"
-    local current_project_dir="$(dirname "$script_dir")"
-    print_debug "script_path: $script_path"
-    print_debug "script_dir: $script_dir"
-    print_debug "current_project_dir: $current_project_dir"
-    
-    if [[ -d "$current_project_dir" ]]; then
+    if [[ -d "$PROJECT_ROOT" ]] && [[ "$PROJECT_ROOT" != "$install_dir" ]]; then
         # Если запускаем с флешки или другой директории
-        local backup_name="$(basename "$current_project_dir")_backup_$(date +%Y%m%d_%H%M%S)"
-        local backup_path="$(dirname "$current_project_dir")/$backup_name"
+        local backup_name="$(basename "$PROJECT_ROOT")_backup_$(date +%Y%m%d_%H%M%S)"
+        local backup_path="$(dirname "$PROJECT_ROOT")/$backup_name"
         print_debug "Создание резервной копии в: $backup_path"
-        cp -r "$current_project_dir" "$backup_path"
+        cp -r "$PROJECT_ROOT" "$backup_path"
         print_success "Резервная копия создана: $backup_path"
         return 0
     elif [[ -d "$install_dir" ]]; then
@@ -220,15 +218,10 @@ update_utility() {
     
     # Копируем новые файлы
     print_message "Установка обновления..."
+    print_debug "Обновление - PROJECT_ROOT: $PROJECT_ROOT"
+    print_debug "Обновление - INSTALL_DIR: $INSTALL_DIR"
     
-    # Определяем текущую директорию проекта
-    local script_path="$(readlink -f "$0")"
-    local script_dir="$(dirname "$script_path")"
-    local current_project_dir="$(dirname "$script_dir")"
-    print_debug "Обновление - script_path: $script_path"
-    print_debug "Обновление - current_project_dir: $current_project_dir"
-    
-    if [[ -d "$INSTALL_DIR" ]]; then
+    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
         # Если утилита установлена в память Steam Deck
         print_message "Обновление установленной утилиты в $INSTALL_DIR..."
         
@@ -271,23 +264,23 @@ update_utility() {
             fi
         fi
         
-    elif [[ -d "$current_project_dir" ]]; then
+    elif [[ -d "$PROJECT_ROOT" ]]; then
         # Если запускаем с флешки или другой директории
-        print_message "Обновление утилиты в текущей директории: $current_project_dir..."
+        print_message "Обновление утилиты в текущей директории: $PROJECT_ROOT..."
         
         # Сохраняем пользовательские настройки
-        local user_config="$current_project_dir/user_config"
+        local user_config="$PROJECT_ROOT/user_config"
         if [[ -d "$user_config" ]]; then
             cp -r "$user_config" "$TEMP_DIR/"
         fi
         
         # Удаляем старую версию
         print_message "Удаление старой версии..."
-        rm -rf "$current_project_dir"/*
+        rm -rf "$PROJECT_ROOT"/*
         
         # Копируем новую версию
         print_message "Копирование новой версии..."
-        cp -r "$TEMP_DIR/steamdeck_latest"/* "$current_project_dir/"
+        cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"
         
     else
         print_error "Не найдена директория для обновления"
@@ -296,10 +289,10 @@ update_utility() {
     
     # Восстанавливаем пользовательские настройки
     if [[ -d "$TEMP_DIR/user_config" ]]; then
-        if [[ -d "$INSTALL_DIR" ]]; then
+        if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
             cp -r "$TEMP_DIR/user_config" "$INSTALL_DIR/"
-        elif [[ -d "$current_project_dir" ]]; then
-            cp -r "$TEMP_DIR/user_config" "$current_project_dir/"
+        elif [[ -d "$PROJECT_ROOT" ]]; then
+            cp -r "$TEMP_DIR/user_config" "$PROJECT_ROOT/"
         fi
     fi
     
@@ -313,16 +306,16 @@ update_utility() {
         fi
     fi
     # Устанавливаем права доступа
-    if [[ -d "$INSTALL_DIR" ]]; then
+    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
         # Для установленной утилиты
         chmod -R 755 "$INSTALL_DIR"
         chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
         chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
-    elif [[ -d "$current_project_dir" ]]; then
+    elif [[ -d "$PROJECT_ROOT" ]]; then
         # Для утилиты на флешке
-        chmod -R 755 "$current_project_dir"
-        chmod +x "$current_project_dir/scripts"/*.sh 2>/dev/null || true
-        chmod +x "$current_project_dir"/*.sh 2>/dev/null || true
+        chmod -R 755 "$PROJECT_ROOT"
+        chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
+        chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
     fi
     
     # Обновляем символические ссылки (только если пользователь существует)
