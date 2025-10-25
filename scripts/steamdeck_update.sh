@@ -95,9 +95,12 @@ check_git() {
 
 # Функция для получения текущей версии
 get_current_version() {
-    local version_file="$INSTALL_DIR/VERSION"
+    # Сначала пробуем найти VERSION в текущей директории
+    local version_file="$(dirname "$(dirname "$(readlink -f "$0")")")/VERSION"
     if [[ -f "$version_file" ]]; then
-        cat "$version_file"
+        cat "$version_file" | tr -d '\n'
+    elif [[ -f "$INSTALL_DIR/VERSION" ]]; then
+        cat "$INSTALL_DIR/VERSION" | tr -d '\n'
     else
         echo "unknown"
     fi
@@ -178,12 +181,22 @@ update_utility() {
             cp -r "$user_config" "$TEMP_DIR/"
         fi
         
-        # Удаляем старую версию
-        rm -rf "$INSTALL_DIR"
+        # Удаляем старую версию (с проверкой прав доступа)
+        if [[ -w "$INSTALL_DIR" ]]; then
+            rm -rf "$INSTALL_DIR"
+        else
+            print_message "Требуются права администратора для удаления старой версии..."
+            sudo rm -rf "$INSTALL_DIR"
+        fi
     fi
     
-    # Копируем новую версию
-    cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+    # Копируем новую версию (с проверкой прав доступа)
+    if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
+        cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+    else
+        print_message "Требуются права администратора для копирования новой версии..."
+        sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+    fi
     
     # Восстанавливаем пользовательские настройки
     if [[ -d "$TEMP_DIR/user_config" ]]; then
