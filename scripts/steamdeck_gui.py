@@ -7,13 +7,14 @@ Steam Deck Enhancement Pack GUI
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, scrolledtext
+from tkinter import ttk, messagebox, filedialog, scrolledtext, simpledialog
 import subprocess
 import threading
 import os
 import sys
 import time
 import queue
+import getpass
 from pathlib import Path
 
 class SteamDeckGUI:
@@ -39,6 +40,8 @@ class SteamDeckGUI:
         self.progress_queue = queue.Queue()
         self.progress_bar = None
         self.progress_label = None
+        self.sudo_password = None
+        self.sudo_authenticated = False
         
         self.create_widgets()
         
@@ -67,6 +70,9 @@ class SteamDeckGUI:
         
         # Вкладка "Offline"
         self.create_offline_tab(notebook)
+        
+        # Вкладка "Обложки"
+        self.create_artwork_tab(notebook)
         
         # Вкладка "Логи"
         self.create_logs_tab(notebook)
@@ -105,15 +111,15 @@ class SteamDeckGUI:
         row1.pack(pady=5)
         
         ttk.Button(row1, text="Настройка системы", 
-                  command=lambda: self.run_script("steamdeck_setup.sh", "setup"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_setup.sh", "setup"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row1, text="Резервная копия", 
-                  command=lambda: self.run_script("steamdeck_backup.sh", "backup"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_backup.sh", "backup"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row1, text="Очистка системы", 
-                  command=lambda: self.run_script("steamdeck_cleanup.sh", "safe"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_cleanup.sh", "safe"),
                   width=20).pack(side='left', padx=5)
         
         # Вторая строка кнопок
@@ -126,6 +132,14 @@ class SteamDeckGUI:
         
         ttk.Button(row2, text="Статус системы", 
                   command=lambda: self.run_script("steamdeck_setup.sh", "status"),
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row2, text="Сброс sudo", 
+                  command=self.reset_sudo_auth,
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row2, text="MicroSD", 
+                  command=self.open_microsd_menu,
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row2, text="Восстановить бэкап", 
@@ -274,15 +288,15 @@ class SteamDeckGUI:
         profiles_buttons.pack(pady=10)
         
         ttk.Button(profiles_buttons, text="Производительность", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "performance"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "performance"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(profiles_buttons, text="Баланс", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "profile BALANCED"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "profile BALANCED"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(profiles_buttons, text="Экономия батареи", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "battery"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "battery"),
                   width=20).pack(side='left', padx=5)
         
         # Настройки TDP
@@ -293,15 +307,15 @@ class SteamDeckGUI:
         tdp_buttons.pack(pady=10)
         
         ttk.Button(tdp_buttons, text="3W (Макс. батарея)", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "profile BATTERY_SAVER"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "profile BATTERY_SAVER"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(tdp_buttons, text="10W (Баланс)", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "profile BALANCED"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "profile BALANCED"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(tdp_buttons, text="15W (Макс. производительность)", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "profile PERFORMANCE"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "profile PERFORMANCE"),
                   width=20).pack(side='left', padx=5)
         
         # Оптимизация для игр
@@ -398,11 +412,11 @@ class SteamDeckGUI:
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row3, text="Настроить профили", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "setup"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "setup"),
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row3, text="Сброс настроек", 
-                  command=lambda: self.run_script("steamdeck_optimizer.sh", "reset"),
+                  command=lambda: self.run_script_with_sudo("steamdeck_optimizer.sh", "reset"),
                   width=20).pack(side='left', padx=5)
         
         # Область вывода
@@ -686,6 +700,188 @@ class SteamDeckGUI:
             pass
         finally:
             self.root.after(100, self.process_progress_queue)
+    
+    def request_sudo_password(self):
+        """Запрос пароля sudo у пользователя"""
+        if self.sudo_authenticated and self.sudo_password:
+            return True
+            
+        # Показываем диалог ввода пароля
+        password = simpledialog.askstring(
+            "Требуется пароль sudo",
+            "Введите пароль для выполнения административных команд:",
+            show='*'
+        )
+        
+        if not password:
+            self.append_output("❌ Пароль не введен. Операция отменена.")
+            return False
+            
+        # Проверяем пароль
+        if self.verify_sudo_password(password):
+            self.sudo_password = password
+            self.sudo_authenticated = True
+            self.append_output("✅ Пароль sudo принят")
+            return True
+        else:
+            self.append_output("❌ Неверный пароль sudo")
+            return False
+    
+    def verify_sudo_password(self, password):
+        """Проверка пароля sudo"""
+        try:
+            # Создаем временный процесс для проверки пароля
+            process = subprocess.Popen(
+                ['sudo', '-S', 'echo', 'test'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            stdout, stderr = process.communicate(input=password + '\n')
+            return process.returncode == 0
+        except Exception as e:
+            self.append_output(f"❌ Ошибка проверки пароля: {e}")
+            return False
+    
+    def run_script_with_sudo(self, script_name, args=""):
+        """Запуск скрипта с sudo"""
+        if not self.request_sudo_password():
+            return
+            
+        def run():
+            try:
+                script_path = self.scripts_dir / script_name
+                if not script_path.exists():
+                    self.append_output(f"Ошибка: Скрипт {script_name} не найден")
+                    return
+                
+                # Делаем скрипт исполняемым
+                os.chmod(script_path, 0o755)
+                
+                # Формируем команду с sudo
+                if args:
+                    cmd = ['sudo', '-S', str(script_path), args]
+                else:
+                    cmd = ['sudo', '-S', str(script_path)]
+                
+                self.append_output(f"Запуск с sudo: {' '.join(cmd)}")
+                
+                # Запускаем процесс
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+                
+                self.running_process = process
+                
+                # Отправляем пароль в stdin
+                process.stdin.write(self.sudo_password + '\n')
+                process.stdin.flush()
+                
+                # Читаем вывод в реальном времени
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        self.append_output(line.rstrip())
+                
+                process.wait()
+                self.append_output(f"Команда завершена с кодом: {process.returncode}")
+                
+            except Exception as e:
+                self.append_output(f"Ошибка: {str(e)}")
+            finally:
+                self.running_process = None
+        
+        # Запускаем в отдельном потоке
+        thread = threading.Thread(target=run)
+        thread.daemon = True
+        thread.start()
+    
+    def reset_sudo_auth(self):
+        """Сброс sudo аутентификации"""
+        self.sudo_password = None
+        self.sudo_authenticated = False
+        self.append_output("🔐 Sudo аутентификация сброшена")
+    
+    def open_microsd_menu(self):
+        """Открыть меню управления MicroSD"""
+        # Создаем диалог MicroSD
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Управление MicroSD")
+        dialog.geometry("500x400")
+        dialog.configure(bg='#2b2b2b')
+        
+        # Заголовок
+        ttk.Label(dialog, text="Управление MicroSD картами", 
+                 font=('Arial', 12, 'bold')).pack(pady=10)
+        
+        # Кнопки управления
+        buttons_frame = ttk.Frame(dialog)
+        buttons_frame.pack(pady=10)
+        
+        # Первая строка
+        row1 = ttk.Frame(buttons_frame)
+        row1.pack(pady=5)
+        
+        ttk.Button(row1, text="Проверить карты", 
+                  command=lambda: self.run_script("steamdeck_microsd.sh", "check"),
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row1, text="Информация о монтировании", 
+                  command=lambda: self.run_script("steamdeck_microsd.sh", "mount-info"),
+                  width=20).pack(side='left', padx=5)
+        
+        # Вторая строка
+        row2 = ttk.Frame(buttons_frame)
+        row2.pack(pady=5)
+        
+        ttk.Button(row2, text="Диагностика UI", 
+                  command=lambda: self.run_script("steamdeck_microsd.sh", "diagnose"),
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row2, text="Обновить UI", 
+                  command=lambda: self.run_script_with_sudo("steamdeck_microsd.sh", "refresh"),
+                  width=20).pack(side='left', padx=5)
+        
+        # Третья строка
+        row3 = ttk.Frame(buttons_frame)
+        row3.pack(pady=5)
+        
+        ttk.Button(row3, text="Исправить проблемы", 
+                  command=lambda: self.run_script_with_sudo("steamdeck_microsd.sh", "fix"),
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row3, text="Безопасно извлечь", 
+                  command=lambda: self.run_script_with_sudo("steamdeck_microsd.sh", "safely-remove"),
+                  width=20).pack(side='left', padx=5)
+        
+        # Четвертая строка
+        row4 = ttk.Frame(buttons_frame)
+        row4.pack(pady=5)
+        
+        ttk.Button(row4, text="Тестирование", 
+                  command=lambda: self.run_script("steamdeck_microsd.sh", "test"),
+                  width=20).pack(side='left', padx=5)
+        
+        # Область вывода
+        output_frame = ttk.LabelFrame(dialog, text="Вывод команд")
+        output_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        microsd_output = scrolledtext.ScrolledText(output_frame, height=10, 
+                                                  bg='#1e1e1e', fg='white')
+        microsd_output.pack(fill='both', expand=True, padx=5, pady=5)
+        
+        # Кнопка закрытия
+        ttk.Button(dialog, text="Закрыть", command=dialog.destroy).pack(pady=10)
+        
+        # Сохраняем ссылку на область вывода для этого диалога
+        dialog.microsd_output = microsd_output
         
     def load_system_info(self):
         """Загрузка информации о системе"""
@@ -1195,6 +1391,157 @@ Steam Deck Enhancement Pack GUI v0.1
         if rar_file:
             self.show_progress(f"Анализ {os.path.basename(rar_file)}...")
             self.run_script("steamdeck_steamrip.sh", f"analyze \"{rar_file}\"")
+
+    def create_artwork_tab(self, notebook):
+        """Создание вкладки 'Обложки'"""
+        artwork_frame = ttk.Frame(notebook)
+        notebook.add(artwork_frame, text="🎨 Обложки")
+        
+        # Заголовок
+        title_label = ttk.Label(artwork_frame, text="Управление обложками Steam Deck", 
+                               font=('Arial', 16, 'bold'))
+        title_label.pack(pady=10)
+        
+        # Основной фрейм
+        main_frame = ttk.Frame(artwork_frame)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Левая панель - кнопки
+        left_frame = ttk.Frame(main_frame)
+        left_frame.pack(side='left', fill='y', padx=(0, 10))
+        
+        # Кнопки для утилиты
+        utils_frame = ttk.LabelFrame(left_frame, text="Обложки утилиты", padding=10)
+        utils_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(utils_frame, text="Создать обложки утилиты", 
+                  command=self.create_utils_artwork).pack(fill='x', pady=2)
+        
+        ttk.Button(utils_frame, text="Установить обложки утилиты", 
+                  command=self.install_utils_artwork).pack(fill='x', pady=2)
+        
+        # Кнопки для игр
+        games_frame = ttk.LabelFrame(left_frame, text="Обложки игр", padding=10)
+        games_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(games_frame, text="Создать обложки игры", 
+                  command=self.create_game_artwork).pack(fill='x', pady=2)
+        
+        ttk.Button(games_frame, text="Скачать с Steam Grid DB", 
+                  command=self.download_from_steamgriddb).pack(fill='x', pady=2)
+        
+        ttk.Button(games_frame, text="Массовая установка", 
+                  command=self.batch_install_artwork).pack(fill='x', pady=2)
+        
+        # Кнопки для эмуляторов
+        emulators_frame = ttk.LabelFrame(left_frame, text="Обложки эмуляторов", padding=10)
+        emulators_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(emulators_frame, text="Установить обложки эмуляторов", 
+                  command=self.install_emulator_artwork).pack(fill='x', pady=2)
+        
+        # Кнопки для шаблонов
+        templates_frame = ttk.LabelFrame(left_frame, text="Шаблоны", padding=10)
+        templates_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(templates_frame, text="Создать шаблоны", 
+                  command=self.create_artwork_templates).pack(fill='x', pady=2)
+        
+        ttk.Button(templates_frame, text="Открыть папку обложек", 
+                  command=self.open_artwork_folder).pack(fill='x', pady=2)
+        
+        # Правая панель - информация и вывод
+        right_frame = ttk.Frame(main_frame)
+        right_frame.pack(side='right', fill='both', expand=True)
+        
+        # Информационная панель
+        info_frame = ttk.LabelFrame(right_frame, text="Информация", padding=10)
+        info_frame.pack(fill='x', pady=(0, 10))
+        
+        info_text = """
+🎨 Управление обложками Steam Deck
+
+📐 Размеры обложек:
+• Grid: 460x215 (главная обложка)
+• Hero: 3840x1240 (широкоформатная)
+• Logo: 512x512 (логотип)
+• Icon: 256x256 (иконка)
+
+🛠️ Инструменты:
+• ImageMagick - создание обложек
+• Steam Grid DB - скачивание обложек
+• GIMP/Photoshop - редактирование
+
+📁 Папки:
+• ~/SteamDeck/artwork/ - все обложки
+• ~/SteamDeck/artwork/utils/ - обложки утилиты
+• ~/SteamDeck/artwork/games/ - обложки игр
+• ~/SteamDeck/artwork/emulators/ - обложки эмуляторов
+        """
+        
+        info_label = ttk.Label(info_frame, text=info_text, justify='left')
+        info_label.pack(anchor='w')
+        
+        # Панель вывода
+        output_frame = ttk.LabelFrame(right_frame, text="Вывод", padding=10)
+        output_frame.pack(fill='both', expand=True)
+        
+        self.artwork_output = scrolledtext.ScrolledText(output_frame, height=15, width=60)
+        self.artwork_output.pack(fill='both', expand=True)
+        
+        # Прогресс-бар для обложек
+        self.artwork_progress = ttk.Progressbar(output_frame, mode='indeterminate')
+        self.artwork_progress.pack(fill='x', pady=(5, 0))
+        
+        self.artwork_progress_label = ttk.Label(output_frame, text="")
+        self.artwork_progress_label.pack(pady=(2, 0))
+
+    def create_utils_artwork(self):
+        """Создание обложек для утилиты"""
+        self.run_script("steamdeck_create_artwork.sh", "create-utils", 
+                       "Создание обложек для утилиты...")
+
+    def install_utils_artwork(self):
+        """Установка обложек для утилиты"""
+        self.run_script("steamdeck_artwork.sh", "install-utils", 
+                       "Установка обложек для утилиты...")
+
+    def create_game_artwork(self):
+        """Создание обложек для игры"""
+        game_name = simpledialog.askstring("Создание обложек", "Введите название игры:")
+        if game_name:
+            self.run_script("steamdeck_create_artwork.sh", f"create-game \"{game_name}\"", 
+                           f"Создание обложек для игры '{game_name}'...")
+
+    def download_from_steamgriddb(self):
+        """Скачивание обложек с Steam Grid DB"""
+        game_name = simpledialog.askstring("Steam Grid DB", "Введите название игры:")
+        if game_name:
+            self.run_script("steamdeck_steamgriddb.sh", f"install \"{game_name}\"", 
+                           f"Скачивание обложек для '{game_name}' с Steam Grid DB...")
+
+    def batch_install_artwork(self):
+        """Массовая установка обложек"""
+        self.run_script("steamdeck_steamgriddb.sh", "batch", 
+                       "Массовая установка обложек...")
+
+    def install_emulator_artwork(self):
+        """Установка обложек для эмуляторов"""
+        self.run_script("steamdeck_artwork.sh", "install-emulators", 
+                       "Установка обложек для эмуляторов...")
+
+    def create_artwork_templates(self):
+        """Создание шаблонов обложек"""
+        self.run_script("steamdeck_create_artwork.sh", "create-templates", 
+                       "Создание шаблонов обложек...")
+
+    def open_artwork_folder(self):
+        """Открытие папки с обложками"""
+        artwork_dir = os.path.expanduser("~/SteamDeck/artwork")
+        if os.path.exists(artwork_dir):
+            subprocess.Popen(["dolphin", artwork_dir])
+        else:
+            messagebox.showinfo("Информация", "Папка с обложками не найдена.\nСначала создайте обложки.")
 
 def main():
     # Проверяем, что мы в правильной директории

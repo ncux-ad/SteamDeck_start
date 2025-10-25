@@ -531,20 +531,210 @@ show_help() {
     echo "Использование: $0 [ОПЦИЯ]"
     echo
     echo "ОПЦИИ:"
-    echo "  setup     - Полная настройка системы (по умолчанию)"
-    echo "  disable   - Отключить режим только для чтения"
-    echo "  enable    - Включить режим только для чтения"
-    echo "  rollback  - Откат изменений setup"
-    echo "  status    - Показать статус системы"
-    echo "  help      - Показать эту справку"
+    echo "  setup          - Полная настройка системы (по умолчанию)"
+    echo "  disable        - Отключить режим только для чтения"
+    echo "  enable         - Включить режим только для чтения"
+    echo "  rollback       - Откат изменений setup"
+    echo "  install-utils  - Установить утилиты в основную память"
+    echo "  status         - Показать статус системы"
+    echo "  help           - Показать эту справку"
     echo
     echo "ПРИМЕРЫ:"
-    echo "  $0              # Полная настройка"
-    echo "  $0 setup        # Полная настройка"
-    echo "  $0 disable      # Только отключить readonly"
-    echo "  $0 enable       # Только включить readonly"
-    echo "  $0 rollback     # Откат изменений setup"
-    echo "  $0 status       # Показать статус"
+    echo "  $0                  # Полная настройка"
+    echo "  $0 setup            # Полная настройка"
+    echo "  $0 disable          # Только отключить readonly"
+    echo "  $0 enable           # Только включить readonly"
+    echo "  $0 rollback         # Откат изменений setup"
+    echo "  $0 install-utils    # Установить утилиты"
+    echo "  $0 status           # Показать статус"
+}
+
+# Функция для установки Steam Deck Utils
+install_steamdeck_utils() {
+    print_message "Установка Steam Deck Enhancement Pack..."
+    
+    local utils_dir="/home/deck/SteamDeck"
+    local current_dir=$(dirname "$(readlink -f "$0")")
+    
+    # Создаем директорию для утилит
+    if [[ ! -d "$utils_dir" ]]; then
+        print_message "Создание директории $utils_dir..."
+        mkdir -p "$utils_dir"
+        chown deck:deck "$utils_dir"
+    fi
+    
+    # Копируем все файлы проекта
+    print_message "Копирование файлов утилиты..."
+    cp -r "$current_dir"/* "$utils_dir/" 2>/dev/null || {
+        print_warning "Не удалось скопировать все файлы"
+        print_message "Попытка копирования основных компонентов..."
+        
+        # Копируем основные скрипты
+        mkdir -p "$utils_dir/scripts"
+        cp "$current_dir"/*.sh "$utils_dir/scripts/" 2>/dev/null || true
+        cp "$current_dir"/*.py "$utils_dir/scripts/" 2>/dev/null || true
+        
+        # Копируем руководства
+        mkdir -p "$utils_dir/guides"
+        cp "$current_dir/guides"/*.md "$utils_dir/guides/" 2>/dev/null || true
+        
+        # Копируем конфигурационные файлы
+        cp "$current_dir"/*.md "$utils_dir/" 2>/dev/null || true
+        cp "$current_dir"/*.yml "$utils_dir/" 2>/dev/null || true
+        cp "$current_dir"/*.sh "$utils_dir/" 2>/dev/null || true
+    }
+    
+    # Устанавливаем права доступа
+    print_message "Установка прав доступа..."
+    chown -R deck:deck "$utils_dir"
+    chmod -R 755 "$utils_dir"
+    chmod +x "$utils_dir/scripts"/*.sh 2>/dev/null || true
+    chmod +x "$utils_dir"/*.sh 2>/dev/null || true
+    
+    # Создаем символические ссылки для быстрого доступа
+    print_message "Создание символических ссылок..."
+    
+    # Ссылка на главный скрипт настройки
+    ln -sf "$utils_dir/scripts/steamdeck_setup.sh" "/home/deck/steamdeck-setup" 2>/dev/null || true
+    
+    # Ссылка на GUI
+    ln -sf "$utils_dir/scripts/steamdeck_gui.py" "/home/deck/steamdeck-gui" 2>/dev/null || true
+    
+    # Ссылка на скрипт бэкапа
+    ln -sf "$utils_dir/scripts/steamdeck_backup.sh" "/home/deck/steamdeck-backup" 2>/dev/null || true
+    
+    # Ссылка на скрипт очистки
+    ln -sf "$utils_dir/scripts/steamdeck_cleanup.sh" "/home/deck/steamdeck-cleanup" 2>/dev/null || true
+    
+    # Ссылка на скрипт оптимизации
+    ln -sf "$utils_dir/scripts/steamdeck_optimizer.sh" "/home/deck/steamdeck-optimizer" 2>/dev/null || true
+    
+    # Ссылка на скрипт MicroSD
+    ln -sf "$utils_dir/scripts/steamdeck_microsd.sh" "/home/deck/steamdeck-microsd" 2>/dev/null || true
+    
+    # Создаем desktop файл для GUI
+    print_message "Создание desktop файла для GUI..."
+    cat > "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop" << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Steam Deck Enhancement Pack
+Comment=Утилиты для управления Steam Deck
+Exec=python3 /home/deck/SteamDeck/scripts/steamdeck_gui.py
+Icon=steam
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true
+EOF
+    
+    chmod +x "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    chown deck:deck "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    
+    # Обновляем desktop базу
+    update-desktop-database "/home/deck/.local/share/applications" 2>/dev/null || true
+    
+    # Создаем скрипт быстрого запуска
+    print_message "Создание скрипта быстрого запуска..."
+    cat > "/home/deck/steamdeck-utils" << 'EOF'
+#!/bin/bash
+# Steam Deck Enhancement Pack - Быстрый запуск
+# Автор: @ncux11
+# Версия: 0.1 (Октябрь 2025)
+
+echo "🎮 Steam Deck Enhancement Pack v0.1"
+echo "=================================="
+echo
+echo "Доступные команды:"
+echo "  steamdeck-setup     - Настройка системы"
+echo "  steamdeck-gui       - Графический интерфейс"
+echo "  steamdeck-backup    - Резервное копирование"
+echo "  steamdeck-cleanup   - Очистка системы"
+echo "  steamdeck-optimizer - Оптимизация"
+echo "  steamdeck-microsd   - Управление MicroSD"
+echo
+echo "Или запустите GUI: python3 ~/SteamDeck/scripts/steamdeck_gui.py"
+echo
+EOF
+    
+    chmod +x "/home/deck/steamdeck-utils"
+    chown deck:deck "/home/deck/steamdeck-utils"
+    
+    # Копируем готовые обложки утилиты
+    print_message "Копирование обложек утилиты..."
+    local artwork_source_dir="$current_dir/../artwork/utils"
+    local artwork_dest_dir="$utils_dir/artwork/utils"
+    
+    if [[ -d "$artwork_source_dir" ]]; then
+        mkdir -p "$artwork_dest_dir"
+        cp -r "$artwork_source_dir"/* "$artwork_dest_dir/" 2>/dev/null || true
+        chown -R deck:deck "$artwork_dest_dir" 2>/dev/null || true
+        print_success "Обложки утилиты скопированы"
+    else
+        print_warning "Папка с обложками не найдена: $artwork_source_dir"
+    fi
+    
+    # Создаем README для пользователя
+    print_message "Создание пользовательского README..."
+    cat > "/home/deck/SteamDeck/QUICK_START.md" << 'EOF'
+# Steam Deck Enhancement Pack - Быстрый старт
+
+## 🚀 Быстрый запуск
+
+### Графический интерфейс:
+```bash
+python3 ~/SteamDeck/scripts/steamdeck_gui.py
+```
+
+### Командная строка:
+```bash
+# Настройка системы
+~/steamdeck-setup
+
+# Резервное копирование
+~/steamdeck-backup
+
+# Очистка системы
+~/steamdeck-cleanup
+
+# Оптимизация
+~/steamdeck-optimizer
+
+# Управление MicroSD
+~/steamdeck-microsd
+
+# Показать все команды
+~/steamdeck-utils
+```
+
+## 📁 Расположение файлов
+
+- **Скрипты:** `~/SteamDeck/scripts/`
+- **Руководства:** `~/SteamDeck/guides/`
+- **Символические ссылки:** `~/steamdeck-*`
+
+## 🎯 Первый запуск
+
+1. Запустите GUI: `python3 ~/SteamDeck/scripts/steamdeck_gui.py`
+2. Нажмите "Настройка системы" для первоначальной настройки
+3. Используйте другие функции по необходимости
+
+## 📚 Документация
+
+Все руководства находятся в папке `~/SteamDeck/guides/`
+
+---
+*Steam Deck Enhancement Pack v0.1*
+*Автор: @ncux11*
+EOF
+    
+    chown deck:deck "/home/deck/SteamDeck/QUICK_START.md"
+    
+    print_success "Steam Deck Enhancement Pack установлен в $utils_dir"
+    print_message "Созданы символические ссылки для быстрого доступа"
+    print_message "Desktop файл создан для запуска из меню приложений"
+    print_message "Быстрый старт: ~/steamdeck-utils"
+    
+    log_setup_state "utils_installed" "$utils_dir"
 }
 
 # Основная функция настройки
@@ -569,6 +759,7 @@ main_setup() {
     install_protontricks
     install_protonup
     install_sniper
+    install_steamdeck_utils
     cleanup_cache
     
     echo
@@ -608,6 +799,11 @@ case "${1:-setup}" in
         check_root
         check_password
         rollback_setup
+        ;;
+    "install-utils")
+        check_root
+        check_password
+        install_steamdeck_utils
         ;;
     "help"|"-h"|"--help")
         show_help

@@ -19,12 +19,18 @@
 - **steamdeck_native_games.sh** - Работа с Native Linux играми (.sh)
 - **steamdeck_offline_setup.sh** - Настройка для offline-режима
 - **steamdeck_steamrip.sh** - Обработчик SteamRip-pack в RAR-файлах
+- **steamdeck_microsd.sh** - Управление MicroSD картами
+- **steamdeck_artwork.sh** - Управление обложками Steam Deck
+- **steamdeck_create_artwork.sh** - Создание обложек
+- **steamdeck_steamgriddb.sh** - Интеграция с Steam Grid DB
 - **steamdeck_gui.py** - Графический интерфейс для всех скриптов
 
 ### 📚 Подробные руководства
 - **steamdeck_setup_guide.md** - Подготовка к установке ПО
 - **steamdeck_windows_games_guide.md** - Запуск Windows-игр
 - **steamdeck_native_games_guide.md** - Native Linux игры (.sh скрипты)
+- **steamdeck_microsd_guide.md** - Управление MicroSD картами
+- **steamdeck_artwork_guide.md** - Управление обложками Steam Deck
 - **steamdeck_offline_tricks.md** - Offline-трюки и оптимизация
 - **steamdeck_offline_quickstart.md** - Быстрый старт для offline-режима
 - **steamdeck_gui_guide.md** - Графический интерфейс
@@ -263,6 +269,44 @@ SteamDeck/
 ./scripts/steamdeck_steamrip.sh batch               # Массовая обработка RAR файлов
 ```
 
+**MicroSD управление**
+
+**steamdeck_microsd.sh** - Управление MicroSD картами
+```bash
+./scripts/steamdeck_microsd.sh check                # Проверить MicroSD карты
+./scripts/steamdeck_microsd.sh mount-info           # Информация о монтировании
+./scripts/steamdeck_microsd.sh diagnose             # Диагностика UI проблем
+./scripts/steamdeck_microsd.sh refresh              # Обновить UI Steam Deck
+./scripts/steamdeck_microsd.sh fix                  # Исправить проблемы с MicroSD
+./scripts/steamdeck_microsd.sh safely-remove        # Безопасно извлечь карты
+./scripts/steamdeck_microsd.sh test                 # Тестирование MicroSD
+```
+
+**Управление обложками**
+
+**steamdeck_artwork.sh** - Управление обложками Steam Deck
+```bash
+./scripts/steamdeck_artwork.sh auto-install         # Автоматическая установка обложек
+./scripts/steamdeck_artwork.sh install-utils        # Обложки для утилиты
+./scripts/steamdeck_artwork.sh install-game "Игра"  # Обложки для игры
+./scripts/steamdeck_artwork.sh install-emulators    # Обложки для эмуляторов
+./scripts/steamdeck_artwork.sh create-templates     # Создать шаблоны
+```
+
+**steamdeck_create_artwork.sh** - Создание обложек
+```bash
+./scripts/steamdeck_create_artwork.sh create-utils  # Создать обложки утилиты
+./scripts/steamdeck_create_artwork.sh create-game "Игра"  # Создать обложки игры
+./scripts/steamdeck_create_artwork.sh create-templates    # Создать шаблоны
+```
+
+**steamdeck_steamgriddb.sh** - Интеграция с Steam Grid DB
+```bash
+./scripts/steamdeck_steamgriddb.sh setup-api        # Настроить API ключ
+./scripts/steamdeck_steamgriddb.sh install "Игра"   # Скачать обложки
+./scripts/steamdeck_steamgriddb.sh batch games.txt  # Массовая установка
+```
+
 **Offline-утилиты**
 ```bash
 ~/SteamDeck_Offline/offline_menu.sh                 # Главное меню
@@ -382,19 +426,24 @@ chmod +x scripts/*.sh
 1. Запустите `./scripts/steamdeck_setup.sh`
 2. Установите приложения через `./scripts/steamdeck_install_apps.sh`
 3. Создайте резервную копию `./scripts/steamdeck_backup.sh`
-4. Изучите руководства в папке `guides/`
+4. Создайте красивые обложки для утилиты
+5. Изучите руководства в папке `guides/`
 
 ### Для геймеров
 1. Настройте профили производительности
 2. Установите эмуляторы и лаунчеры
-3. Оптимизируйте для конкретных игр
-4. Настройте мониторинг производительности
+3. Создайте красивые обложки для игр
+4. Скачайте обложки с Steam Grid DB
+5. Оптимизируйте для конкретных игр
+6. Настройте мониторинг производительности
 
 ### Для продвинутых пользователей
 1. Настройте автоматические бэкапы
 2. Создайте собственные профили оптимизации
 3. Настройте мониторинг в реальном времени
-4. Интегрируйте с внешними инструментами
+4. Создайте профессиональные обложки для всех приложений
+5. Настройте массовую установку обложек
+6. Интегрируйте с внешними инструментами
 
 ---
 
