@@ -155,14 +155,37 @@ get_latest_version() {
 
 # Функция для создания резервной копии
 create_backup() {
-    print_message "Создание резервной копии текущей версии..."
+    local install_dir="$1"
+    local backup_dir="$2"
     
-    if [[ -d "$INSTALL_DIR" ]]; then
-        cp -r "$INSTALL_DIR" "$BACKUP_DIR"
-        print_success "Резервная копия создана: $BACKUP_DIR"
+    print_message "Создание резервной копии текущей версии..."
+    print_debug "install_dir: $install_dir"
+    print_debug "backup_dir: $backup_dir"
+    
+    # Определяем текущую директорию проекта
+    local script_path="$(readlink -f "$0")"
+    local script_dir="$(dirname "$script_path")"
+    local current_project_dir="$(dirname "$script_dir")"
+    print_debug "script_path: $script_path"
+    print_debug "script_dir: $script_dir"
+    print_debug "current_project_dir: $current_project_dir"
+    
+    if [[ -d "$current_project_dir" ]]; then
+        # Если запускаем с флешки или другой директории
+        local backup_name="$(basename "$current_project_dir")_backup_$(date +%Y%m%d_%H%M%S)"
+        local backup_path="$(dirname "$current_project_dir")/$backup_name"
+        print_debug "Создание резервной копии в: $backup_path"
+        cp -r "$current_project_dir" "$backup_path"
+        print_success "Резервная копия создана: $backup_path"
+        return 0
+    elif [[ -d "$install_dir" ]]; then
+        # Если утилита установлена в память Steam Deck
+        print_debug "Создание резервной копии установленной утилиты"
+        cp -r "$install_dir" "$backup_dir"
+        print_success "Резервная копия создана: $backup_dir"
         return 0
     else
-        print_warning "Папка установки не найдена: $INSTALL_DIR"
+        print_warning "Не найдена папка для резервного копирования"
         return 1
     fi
 }
@@ -193,11 +216,22 @@ update_utility() {
     pkill -f "steamdeck_gui.py" 2>/dev/null || true
     
     # Создаем резервную копию
-    create_backup
+    create_backup "$INSTALL_DIR" "$BACKUP_DIR"
     
     # Копируем новые файлы
     print_message "Установка обновления..."
+    
+    # Определяем текущую директорию проекта
+    local script_path="$(readlink -f "$0")"
+    local script_dir="$(dirname "$script_path")"
+    local current_project_dir="$(dirname "$script_dir")"
+    print_debug "Обновление - script_path: $script_path"
+    print_debug "Обновление - current_project_dir: $current_project_dir"
+    
     if [[ -d "$INSTALL_DIR" ]]; then
+        # Если утилита установлена в память Steam Deck
+        print_message "Обновление установленной утилиты в $INSTALL_DIR..."
+        
         # Сохраняем пользовательские настройки
         local user_config="$INSTALL_DIR/user_config"
         if [[ -d "$user_config" ]]; then
@@ -220,40 +254,76 @@ update_utility() {
                 return 1
             fi
         fi
-    fi
-    
-    # Копируем новую версию (с проверкой прав доступа)
-    print_message "Проверка прав доступа для копирования новой версии..."
-    if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
-        print_message "Копирование новой версии без sudo..."
-        cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
-    else
-        print_message "Требуются права администратора для копирования новой версии..."
-        # Проверяем, можем ли мы копировать с sudo
-        if sudo -n true 2>/dev/null; then
-            sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+        
+        # Копируем новую версию в установленную директорию
+        print_message "Копирование новой версии в установленную директорию..."
+        if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
+            print_message "Копирование новой версии без sudo..."
+            cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
         else
-            print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
-            print_error "sudo bash scripts/steamdeck_update.sh update"
-            return 1
+            print_message "Требуются права администратора для копирования новой версии..."
+            if sudo -n true 2>/dev/null; then
+                sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+            else
+                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
+                print_error "sudo bash scripts/steamdeck_update.sh update"
+                return 1
+            fi
         fi
+        
+    elif [[ -d "$current_project_dir" ]]; then
+        # Если запускаем с флешки или другой директории
+        print_message "Обновление утилиты в текущей директории: $current_project_dir..."
+        
+        # Сохраняем пользовательские настройки
+        local user_config="$current_project_dir/user_config"
+        if [[ -d "$user_config" ]]; then
+            cp -r "$user_config" "$TEMP_DIR/"
+        fi
+        
+        # Удаляем старую версию
+        print_message "Удаление старой версии..."
+        rm -rf "$current_project_dir"/*
+        
+        # Копируем новую версию
+        print_message "Копирование новой версии..."
+        cp -r "$TEMP_DIR/steamdeck_latest"/* "$current_project_dir/"
+        
+    else
+        print_error "Не найдена директория для обновления"
+        return 1
     fi
     
     # Восстанавливаем пользовательские настройки
     if [[ -d "$TEMP_DIR/user_config" ]]; then
-        cp -r "$TEMP_DIR/user_config" "$INSTALL_DIR/"
+        if [[ -d "$INSTALL_DIR" ]]; then
+            cp -r "$TEMP_DIR/user_config" "$INSTALL_DIR/"
+        elif [[ -d "$current_project_dir" ]]; then
+            cp -r "$TEMP_DIR/user_config" "$current_project_dir/"
+        fi
     fi
     
-    # Устанавливаем права доступа
-    # Проверяем, есть ли пользователь deck
-    if id "deck" &>/dev/null; then
-        chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
-    else
-        print_warning "Пользователь 'deck' не найден, пропускаем chown"
+    # Устанавливаем права доступа (только для установленной утилиты)
+    if [[ -d "$INSTALL_DIR" ]]; then
+        # Проверяем, есть ли пользователь deck
+        if id "$DECK_USER" &>/dev/null; then
+            chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
+        else
+            print_warning "Пользователь '$DECK_USER' не найден, пропускаем chown"
+        fi
     fi
-    chmod -R 755 "$INSTALL_DIR"
-    chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
-    chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
+    # Устанавливаем права доступа
+    if [[ -d "$INSTALL_DIR" ]]; then
+        # Для установленной утилиты
+        chmod -R 755 "$INSTALL_DIR"
+        chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
+        chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
+    elif [[ -d "$current_project_dir" ]]; then
+        # Для утилиты на флешке
+        chmod -R 755 "$current_project_dir"
+        chmod +x "$current_project_dir/scripts"/*.sh 2>/dev/null || true
+        chmod +x "$current_project_dir"/*.sh 2>/dev/null || true
+    fi
     
     # Обновляем символические ссылки (только если пользователь существует)
     if id "$DECK_USER" &>/dev/null; then
