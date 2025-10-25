@@ -5,7 +5,15 @@
 # Автор: @ncux11
 # Версия: 0.1 (Октябрь 2025)
 
-set -e  # Выход при ошибке
+# set -e  # Временно отключено для лучшего отслеживания ошибок
+
+# Переменные для отслеживания ошибок
+ERRORS=()
+WARNINGS=()
+SUCCESS_COUNT=0
+ERROR_COUNT=0
+WARNING_COUNT=0
+LOG_FILE="/tmp/steamdeck_setup_$(date +%Y%m%d_%H%M%S).log"
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -17,18 +25,74 @@ NC='\033[0m' # No Color
 # Функция для вывода сообщений
 print_message() {
     echo -e "${BLUE}[INFO]${NC} $1"
+    log_to_file "INFO" "$1"
 }
 
 print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
+    log_to_file "SUCCESS" "$1"
+    ((SUCCESS_COUNT++))
 }
 
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
+    log_to_file "WARNING" "$1"
+    WARNINGS+=("$1")
+    ((WARNING_COUNT++))
 }
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+    log_to_file "ERROR" "$1"
+    ERRORS+=("$1")
+    ((ERROR_COUNT++))
+}
+
+# Функция для логирования в файл
+log_to_file() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+}
+
+# Функция для показа сводки ошибок
+show_summary() {
+    echo
+    print_header "СВОДКА НАСТРОЙКИ"
+    
+    print_message "Успешно выполнено операций: $SUCCESS_COUNT"
+    print_message "Предупреждений: $WARNING_COUNT"
+    print_message "Ошибок: $ERROR_COUNT"
+    
+    if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+        echo
+        print_warning "ПРЕДУПРЕЖДЕНИЯ:"
+        for warning in "${WARNINGS[@]}"; do
+            echo "  • $warning"
+        done
+    fi
+    
+    if [[ ${#ERRORS[@]} -gt 0 ]]; then
+        echo
+        print_error "ОШИБКИ:"
+        for error in "${ERRORS[@]}"; do
+            echo "  • $error"
+        done
+    fi
+    
+    echo
+    if [[ $ERROR_COUNT -eq 0 ]]; then
+        print_success "Настройка завершена успешно!"
+    else
+        print_warning "Настройка завершена с ошибками. Проверьте список выше."
+    fi
+    
+    # Показываем путь к логу
+    if [[ -f "$LOG_FILE" ]]; then
+        print_message "Подробный лог сохранен: $LOG_FILE"
+    fi
 }
 
 # Функция для проверки прав root
@@ -466,7 +530,15 @@ install_protonup() {
 install_sniper() {
     print_message "Установка SteamLinuxRuntime - Sniper..."
     
-    local sniper_dir="$HOME/.steam/steam/steamapps/common/SteamLinuxRuntime_sniper"
+    # Определяем правильный путь к Steam в зависимости от пользователя
+    local sniper_dir
+    if [[ $EUID -eq 0 ]] && [[ -n "$SUDO_USER" ]]; then
+        # Если запущен с sudo, используем путь пользователя
+        sniper_dir="/home/$SUDO_USER/.steam/steam/steamapps/common/SteamLinuxRuntime_sniper"
+    else
+        # Если запущен обычным пользователем
+        sniper_dir="$HOME/.steam/steam/steamapps/common/SteamLinuxRuntime_sniper"
+    fi
     
     if [[ -d "$sniper_dir" ]]; then
         print_warning "SteamLinuxRuntime - Sniper уже установлен"
@@ -475,14 +547,30 @@ install_sniper() {
     
     if command -v steam &> /dev/null; then
         print_message "Загрузка SteamLinuxRuntime - Sniper через Steam..."
-        if steam steam://install/1628350; then
-            print_success "SteamLinuxRuntime - Sniper установлен"
-            log_setup_state "sniper_installed"
+        
+        # Если запущен с sudo, переключаемся на пользователя для запуска Steam
+        if [[ $EUID -eq 0 ]] && [[ -n "$SUDO_USER" ]]; then
+            if runuser -l "$SUDO_USER" -c "steam steam://install/1628350" &>/dev/null; then
+                print_success "SteamLinuxRuntime - Sniper установлен"
+                log_setup_state "sniper_installed"
+            else
+                print_warning "Не удалось установить SteamLinuxRuntime - Sniper"
+                print_message "Попробуйте установить вручную через Steam (ID: 1628350)"
+                print_message "Или пропустите этот шаг - Sniper не критичен для работы"
+            fi
         else
-            print_warning "Не удалось установить SteamLinuxRuntime - Sniper"
+            if steam steam://install/1628350 &>/dev/null; then
+                print_success "SteamLinuxRuntime - Sniper установлен"
+                log_setup_state "sniper_installed"
+            else
+                print_warning "Не удалось установить SteamLinuxRuntime - Sniper"
+                print_message "Попробуйте установить вручную через Steam (ID: 1628350)"
+                print_message "Или пропустите этот шаг - Sniper не критичен для работы"
+            fi
         fi
     else
         print_warning "Steam не найден, установка SteamLinuxRuntime - Sniper пропущена"
+        print_message "Альтернатива: установите через Steam вручную (ID: 1628350)"
     fi
 }
 
@@ -806,6 +894,9 @@ main_setup() {
     echo
     print_warning "После завершения работы рекомендуется включить readonly режим:"
     print_message "$0 enable"
+    
+    # Показываем сводку
+    show_summary
 }
 
 # Обработка аргументов командной строки
