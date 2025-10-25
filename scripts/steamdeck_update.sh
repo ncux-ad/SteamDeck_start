@@ -159,7 +159,7 @@ get_latest_version() {
     
     if [[ $? -eq 0 ]] && [[ -n "$version_response" ]]; then
         # Извлекаем содержимое файла из JSON ответа
-        local version=$(echo "$version_response" | grep -o '"content":"[^"]*"' | sed 's/"content":"//;s/"//' | base64 -d 2>/dev/null | tr -d '\n')
+        local version=$(echo "$version_response" | grep -o '"content" *: *"[^"]*"' | sed 's/"content" *: *"//;s/"//' | sed 's/\\n$//' | base64 -d 2>/dev/null | tr -d '\n')
         
         if [[ -n "$version" ]] && [[ "$version" != "null" ]]; then
             echo "$version"
@@ -550,7 +550,7 @@ check_updates() {
         return 0
     else
         print_success "У вас установлена последняя версия"
-        return 1
+        return 0
     fi
 }
 
