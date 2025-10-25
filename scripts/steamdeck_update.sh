@@ -122,14 +122,14 @@ get_current_version() {
     fi
     
     if [[ -n "$version_file" ]]; then
-        print_debug "Найден файл VERSION: $version_file"
+        print_debug "Найден файл VERSION: $version_file" >&2
         cat "$version_file" | tr -d '\n'
     else
-        print_debug "Файл VERSION не найден в:"
-        print_debug "  - $project_root/VERSION"
-        print_debug "  - $INSTALL_DIR/VERSION"
-        print_debug "  - ./VERSION"
-        print_debug "  - $DECK_HOME/SteamDeck/VERSION"
+        print_debug "Файл VERSION не найден в:" >&2
+        print_debug "  - $project_root/VERSION" >&2
+        print_debug "  - $INSTALL_DIR/VERSION" >&2
+        print_debug "  - ./VERSION" >&2
+        print_debug "  - $DECK_HOME/SteamDeck/VERSION" >&2
         echo "unknown"
     fi
 }
@@ -342,9 +342,9 @@ update_utility() {
 check_updates() {
     print_header "ПРОВЕРКА ОБНОВЛЕНИЙ"
     
-    print_debug "Поиск текущей версии..."
+    print_debug "Поиск текущей версии..." >&2
     local current_version=$(get_current_version)
-    print_debug "Получение последней версии с GitHub..."
+    print_debug "Получение последней версии с GitHub..." >&2
     local latest_version=$(get_latest_version)
     
     print_message "Текущая версия: $current_version"
