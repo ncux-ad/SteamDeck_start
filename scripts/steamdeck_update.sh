@@ -145,11 +145,18 @@ get_latest_version() {
     if git clone --depth 1 "$REPO_URL" "$temp_repo" &> /dev/null; then
         local version_file="$temp_repo/VERSION"
         if [[ -f "$version_file" ]]; then
-            cat "$version_file"
+            local version=$(cat "$version_file" | tr -d '\n')
+            if [[ -n "$version" ]]; then
+                echo "$version"
+            else
+                echo "unknown"
+            fi
         else
+            print_debug "Файл VERSION не найден в репозитории" >&2
             echo "unknown"
         fi
     else
+        print_debug "Не удалось клонировать репозиторий для проверки версии" >&2
         echo "unknown"
     fi
     
@@ -449,6 +456,12 @@ verify_update_integrity() {
     # Проверяем версию
     local current_version=$(get_current_version)
     local latest_version=$(get_latest_version)
+    
+    if [[ "$latest_version" == "unknown" ]]; then
+        print_warning "Не удалось получить последнюю версию с GitHub, пропускаем проверку версии"
+        print_success "Проверка целостности пройдена успешно (без проверки версии)"
+        return 0
+    fi
     
     if [[ "$current_version" == "$latest_version" ]]; then
         print_success "Версия соответствует ожидаемой: $current_version"
