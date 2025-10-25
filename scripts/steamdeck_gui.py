@@ -1928,10 +1928,46 @@ Steam Deck Enhancement Pack GUI v0.1
         else:
             messagebox.showinfo("Информация", "Папка с обложками не найдена.\nСначала создайте обложки.")
 
+def check_dependencies():
+    """Проверка зависимостей для GUI"""
+    missing_deps = []
+    
+    # Проверяем Python модули
+    try:
+        import tkinter
+    except ImportError:
+        missing_deps.append("tkinter (python3-tk)")
+    
+    try:
+        import psutil
+    except ImportError:
+        missing_deps.append("psutil")
+    
+    if missing_deps:
+        print("❌ Отсутствуют зависимости:")
+        for dep in missing_deps:
+            print(f"   - {dep}")
+        print("\nУстановите зависимости:")
+        print("   sudo pacman -S python3-tk")
+        print("   pip install psutil")
+        return False
+    
+    return True
+
 def main():
-    # Проверяем, что мы в правильной директории
-    if not Path(__file__).parent.name == "scripts":
-        print("Ошибка: Запустите скрипт из директории scripts/")
+    # Проверяем зависимости
+    if not check_dependencies():
+        sys.exit(1)
+    
+    # Проверяем, что мы в правильной директории проекта
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    
+    # Проверяем наличие ключевых файлов проекта
+    if not (project_root / "VERSION").exists() or not (project_root / "README.md").exists():
+        print("Ошибка: Запустите скрипт из директории Steam Deck Enhancement Pack")
+        print(f"Текущая директория скрипта: {script_dir}")
+        print(f"Ожидаемая корневая директория: {project_root}")
         sys.exit(1)
     
     # Создаем главное окно

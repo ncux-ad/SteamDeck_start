@@ -84,18 +84,20 @@ get_current_version() {
 
 # Функция для получения последней версии с GitHub
 get_latest_version() {
-    local temp_repo="/tmp/steamdeck_latest"
+    local temp_repo="$TEMP_DIR/version_check"
+    
+    # Очищаем и создаем временную папку
+    rm -rf "$temp_repo"
+    mkdir -p "$temp_repo"
     
     # Клонируем репозиторий во временную папку
-    if [[ -d "$temp_repo" ]]; then
-        rm -rf "$temp_repo"
-    fi
-    
-    git clone --depth 1 "$REPO_URL" "$temp_repo" &> /dev/null
-    
-    local version_file="$temp_repo/VERSION"
-    if [[ -f "$version_file" ]]; then
-        cat "$version_file"
+    if git clone --depth 1 "$REPO_URL" "$temp_repo" &> /dev/null; then
+        local version_file="$temp_repo/VERSION"
+        if [[ -f "$version_file" ]]; then
+            cat "$version_file"
+        else
+            echo "unknown"
+        fi
     else
         echo "unknown"
     fi
@@ -122,7 +124,9 @@ create_backup() {
 update_utility() {
     print_message "Обновление Steam Deck Enhancement Pack..."
     
-    # Создаем временную папку
+    # Очищаем и создаем временную папку
+    print_message "Очистка временной папки..."
+    rm -rf "$TEMP_DIR"
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR"
     
@@ -132,6 +136,8 @@ update_utility() {
         print_success "Последняя версия загружена"
     else
         print_error "Не удалось загрузить последнюю версию"
+        # Очищаем временную папку при ошибке
+        rm -rf "$TEMP_DIR"
         return 1
     fi
     
