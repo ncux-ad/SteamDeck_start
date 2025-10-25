@@ -2474,6 +2474,7 @@ def show_first_launch_dialog():
 def main():
     # Проверяем зависимости
     if not check_dependencies():
+        print("❌ Зависимости не установлены")
         sys.exit(1)
     
     # Проверяем, что мы в правильной директории проекта
@@ -2482,24 +2483,28 @@ def main():
     
     # Проверяем наличие ключевых файлов проекта
     if not (project_root / "VERSION").exists() or not (project_root / "README.md").exists():
-        print("Ошибка: Запустите скрипт из директории Steam Deck Enhancement Pack")
+        print("❌ Ошибка: Запустите скрипт из директории Steam Deck Enhancement Pack")
         print(f"Текущая директория скрипта: {script_dir}")
         print(f"Ожидаемая корневая директория: {project_root}")
         sys.exit(1)
     
-    # Проверяем установку при первом запуске
+    # Проверяем установку при первом запуске (только для информации)
     installation_status = check_installation()
     if not installation_status.get('installed', False):
-        # Показываем диалог первого запуска
-        show_first_launch_dialog()
-        return
+        print("ℹ️ Утилита не установлена в память Steam Deck")
+        print("   Вы можете установить её через меню 'Система' → 'Установить утилиту'")
     
     # Создаем главное окно
-    root = tk.Tk()
-    app = SteamDeckGUI(root)
-    
-    # Запускаем GUI
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        app = SteamDeckGUI(root)
+        root.mainloop()
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания GUI: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
