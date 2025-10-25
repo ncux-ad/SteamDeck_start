@@ -2489,10 +2489,11 @@ def main():
         sys.exit(1)
     
     # Проверяем установку при первом запуске (только для информации)
-    installation_status = check_installation()
-    if not installation_status.get('installed', False):
-        print("ℹ️ Утилита не установлена в память Steam Deck")
-        print("   Вы можете установить её через меню 'Система' → 'Установить утилиту'")
+    # Убираем проверку, чтобы GUI всегда запускался
+    # installation_status = check_installation()
+    # if not installation_status.get('installed', False):
+    #     print("ℹ️ Утилита не установлена в память Steam Deck")
+    #     print("   Вы можете установить её через меню 'Система' → 'Установить утилиту'")
     
     # Создаем главное окно
     try:

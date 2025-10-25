@@ -182,20 +182,38 @@ update_utility() {
         fi
         
         # Удаляем старую версию (с проверкой прав доступа)
+        print_message "Проверка прав доступа для удаления старой версии..."
         if [[ -w "$INSTALL_DIR" ]]; then
+            print_message "Удаление старой версии без sudo..."
             rm -rf "$INSTALL_DIR"
         else
             print_message "Требуются права администратора для удаления старой версии..."
-            sudo rm -rf "$INSTALL_DIR"
+            # Проверяем, можем ли мы удалить с sudo
+            if sudo -n true 2>/dev/null; then
+                sudo rm -rf "$INSTALL_DIR"
+            else
+                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
+                print_error "sudo bash scripts/steamdeck_update.sh update"
+                return 1
+            fi
         fi
     fi
     
     # Копируем новую версию (с проверкой прав доступа)
+    print_message "Проверка прав доступа для копирования новой версии..."
     if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
+        print_message "Копирование новой версии без sudo..."
         cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
     else
         print_message "Требуются права администратора для копирования новой версии..."
-        sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+        # Проверяем, можем ли мы копировать с sudo
+        if sudo -n true 2>/dev/null; then
+            sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"
+        else
+            print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
+            print_error "sudo bash scripts/steamdeck_update.sh update"
+            return 1
+        fi
     fi
     
     # Восстанавливаем пользовательские настройки
