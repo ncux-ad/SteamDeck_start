@@ -16,11 +16,18 @@ NC='\033[0m' # No Color
 
 # Конфигурация
 REPO_URL="https://github.com/ncux-ad/SteamDeck_start.git"
-INSTALL_DIR="/home/deck/SteamDeck"
-BACKUP_DIR="/home/deck/SteamDeck_backup_$(date +%Y%m%d_%H%M%S)"
+
+# Определяем текущее местоположение утилиты
+CURRENT_DIR=$(dirname "$(readlink -f "$0")")
+INSTALL_DIR=$(dirname "$CURRENT_DIR")
+BACKUP_DIR="${INSTALL_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
 TEMP_DIR="/tmp/steamdeck_update"
 
 # Функции для вывода
+print_debug() {
+    echo -e "${YELLOW}[DEBUG]${NC} $1"
+}
+
 print_message() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -157,20 +164,29 @@ update_utility() {
     fi
     
     # Устанавливаем права доступа
-    chown -R deck:deck "$INSTALL_DIR"
+    # Проверяем, есть ли пользователь deck
+    if id "deck" &>/dev/null; then
+        chown -R deck:deck "$INSTALL_DIR"
+    else
+        print_warning "Пользователь 'deck' не найден, пропускаем chown"
+    fi
     chmod -R 755 "$INSTALL_DIR"
     chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
     chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
     
-    # Обновляем символические ссылки
-    print_message "Обновление символических ссылок..."
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_setup.sh" "/home/deck/steamdeck-setup" 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_gui.py" "/home/deck/steamdeck-gui" 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_backup.sh" "/home/deck/steamdeck-backup" 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_cleanup.sh" "/home/deck/steamdeck-cleanup" 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_optimizer.sh" "/home/deck/steamdeck-optimizer" 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_microsd.sh" "/home/deck/steamdeck-microsd" 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/scripts/steamdeck_update.sh" "/home/deck/steamdeck-update" 2>/dev/null || true
+    # Обновляем символические ссылки (только если пользователь deck существует)
+    if id "deck" &>/dev/null; then
+        print_message "Обновление символических ссылок..."
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_setup.sh" "/home/deck/steamdeck-setup" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_gui.py" "/home/deck/steamdeck-gui" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_backup.sh" "/home/deck/steamdeck-backup" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_cleanup.sh" "/home/deck/steamdeck-cleanup" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_optimizer.sh" "/home/deck/steamdeck-optimizer" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_microsd.sh" "/home/deck/steamdeck-microsd" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_update.sh" "/home/deck/steamdeck-update" 2>/dev/null || true
+    else
+        print_warning "Пользователь 'deck' не найден, пропускаем создание символических ссылок"
+    fi
     
     # Очищаем временную папку
     rm -rf "$TEMP_DIR"
