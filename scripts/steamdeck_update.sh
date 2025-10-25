@@ -3,7 +3,7 @@
 # Steam Deck Update Script
 # Скрипт для обновления Steam Deck Enhancement Pack через GitHub
 # Автор: @ncux11
-# Версия: 0.1 (Октябрь 2025)
+# Версия: 0.1.1 (Октябрь 2025)
 
 set -e  # Выход при ошибке
 

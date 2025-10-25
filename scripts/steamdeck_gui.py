@@ -3,7 +3,7 @@
 Steam Deck Enhancement Pack GUI
 Графический интерфейс для управления скриптами Steam Deck
 Автор: @ncux11
-Версия: 0.1 (Октябрь 2025)
+Версия: 0.1.1 (Октябрь 2025)
 """
 
 import tkinter as tk
@@ -1408,7 +1408,7 @@ Steam Deck Enhancement Pack GUI v0.1
 • Управление медиа и ROM-ами
 
 Автор: @ncux11
-Версия: 0.1 (Октябрь 2025)
+Версия: 0.1.1 (Октябрь 2025)
         """
         
         messagebox.showinfo("О программе", about_text)
