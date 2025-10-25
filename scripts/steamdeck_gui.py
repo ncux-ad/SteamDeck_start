@@ -166,6 +166,10 @@ class SteamDeckGUI:
                   command=self.restore_backup,
                   width=20).pack(side='left', padx=5)
         
+        ttk.Button(row4, text="Установить утилиту", 
+                  command=self.install_steamdeck_utils,
+                  width=20).pack(side='left', padx=5)
+        
         # Информация о системе
         info_frame = ttk.LabelFrame(system_frame, text="Информация о системе")
         info_frame.pack(fill='both', expand=True, padx=10, pady=10)
@@ -1147,6 +1151,22 @@ class SteamDeckGUI:
         
         if result:
             self.run_script_with_progress("steamdeck_backup.sh", "backup", "Создание резервной копии...")
+    
+    def install_steamdeck_utils(self):
+        """Установка утилиты в основную память Steam Deck"""
+        result = messagebox.askyesno(
+            "Установка утилиты",
+            "Установить Steam Deck Enhancement Pack в основную память?\n\n"
+            "Это создаст:\n"
+            "• Символические ссылки в /home/deck/\n"
+            "• Ярлык на рабочем столе\n"
+            "• Быстрый доступ к утилите\n"
+            "• Автоматическое обновление\n\n"
+            "Продолжить?"
+        )
+        
+        if result:
+            self.run_script_with_progress("steamdeck_setup.sh", "install-utils", "Установка утилиты в основную память...")
     
     def run_cleanup(self):
         """Запуск очистки системы с выбором режима"""
