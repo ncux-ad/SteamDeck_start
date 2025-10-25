@@ -3,7 +3,7 @@
 Steam Deck Enhancement Pack GUI
 Графический интерфейс для управления скриптами Steam Deck
 Автор: @ncux11
-Версия: 0.1.1 (Октябрь 2025)
+Версия: динамическая (читается из VERSION)
 """
 
 import tkinter as tk
@@ -16,6 +16,54 @@ import time
 import queue
 import getpass
 from pathlib import Path
+from datetime import datetime
+
+# Импорт системы логирования
+try:
+    from steamdeck_logger import SteamDeckLogger
+except ImportError:
+    # Fallback если модуль логирования недоступен
+    class SteamDeckLogger:
+        def log_operation(self, operation, status, details=""): pass
+        def log_success(self, operation, details=""): pass
+        def log_error(self, operation, details=""): pass
+        def log_warning(self, operation, details=""): pass
+        def log_info(self, operation, details=""): pass
+        def get_log_path(self): return ""
+
+
+# Специфичные исключения для Steam Deck Enhancement Pack
+class SteamDeckError(Exception):
+    """Базовое исключение для Steam Deck Enhancement Pack"""
+    pass
+
+
+class ScriptNotFoundError(SteamDeckError):
+    """Исключение когда скрипт не найден"""
+    def __init__(self, script_name):
+        self.script_name = script_name
+        super().__init__(f"Скрипт не найден: {script_name}")
+
+
+class DependencyError(SteamDeckError):
+    """Исключение когда отсутствует зависимость"""
+    def __init__(self, dependency):
+        self.dependency = dependency
+        super().__init__(f"Отсутствует зависимость: {dependency}")
+
+
+class SteamDeckPermissionError(SteamDeckError):
+    """Исключение при проблемах с правами доступа"""
+    def __init__(self, operation):
+        self.operation = operation
+        super().__init__(f"Недостаточно прав для операции: {operation}")
+
+
+class ConfigurationError(SteamDeckError):
+    """Исключение при проблемах с конфигурацией"""
+    def __init__(self, config_file):
+        self.config_file = config_file
+        super().__init__(f"Ошибка конфигурации: {config_file}")
 
 class SteamDeckGUI:
     def __init__(self, root):
@@ -44,10 +92,28 @@ class SteamDeckGUI:
         self.sudo_password = None
         self.sudo_authenticated = False
         
+        # Инициализация логгера
+        self.logger = SteamDeckLogger()
+        
+        # Получаем версию из файла VERSION
+        self.version = self.get_version()
+        
         self.create_widgets()
         
         # Запускаем обработчик прогресса
         self.root.after(100, self.process_progress_queue)
+    
+    def get_version(self):
+        """Получение версии из файла VERSION"""
+        try:
+            version_file = self.project_root / "VERSION"
+            if version_file.exists():
+                with open(version_file, 'r') as f:
+                    return f.read().strip()
+            else:
+                return "0.1.3"  # Fallback версия
+        except:
+            return "0.1.3"  # Fallback версия
         
     def create_widgets(self):
         # Главное меню
@@ -169,6 +235,18 @@ class SteamDeckGUI:
         
         ttk.Button(row4, text="Установить утилиту", 
                   command=self.install_steamdeck_utils,
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row4, text="Настроить конфигурацию", 
+                  command=self.configure_settings,
+                  width=20).pack(side='left', padx=5)
+        
+        # Пятая строка кнопок - логи и диагностика
+        row5 = ttk.Frame(buttons_frame)
+        row5.pack(pady=5)
+        
+        ttk.Button(row5, text="Экспорт логов", 
+                  command=self.export_logs,
                   width=20).pack(side='left', padx=5)
         
         # Информация о системе
@@ -1170,6 +1248,245 @@ class SteamDeckGUI:
         if result:
             self.run_script_with_progress("steamdeck_setup.sh", "install-utils", "Установка утилиты в основную память...")
     
+    def configure_settings(self):
+        """Диалог настройки конфигурации"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Настройка конфигурации")
+        dialog.geometry("500x400")
+        dialog.configure(bg='#2b2b2b')
+        dialog.resizable(False, False)
+        
+        # Центрируем диалог
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Заголовок
+        title_label = tk.Label(dialog, text="Настройка Steam Deck Enhancement Pack", 
+                              font=('Arial', 14, 'bold'), fg='white', bg='#2b2b2b')
+        title_label.pack(pady=20)
+        
+        # Описание
+        desc_label = tk.Label(dialog, 
+                             text="Выберите режим конфигурации:",
+                             font=('Arial', 10), fg='white', bg='#2b2b2b')
+        desc_label.pack(pady=10)
+        
+        # Кнопки выбора
+        button_frame = tk.Frame(dialog, bg='#2b2b2b')
+        button_frame.pack(pady=20)
+        
+        tk.Button(button_frame, text="По умолчанию", 
+                 command=lambda: [dialog.destroy(), self.create_default_config()],
+                 bg='#4CAF50', fg='white', font=('Arial', 12, 'bold'), 
+                 width=20, height=2).pack(pady=10)
+        
+        default_info = tk.Label(button_frame,
+                               text="Пользователь: deck\nДиректория: /home/deck/SteamDeck",
+                               font=('Arial', 9), fg='#aaa', bg='#2b2b2b')
+        default_info.pack(pady=5)
+        
+        tk.Button(button_frame, text="Настроить", 
+                 command=lambda: [dialog.destroy(), self.create_custom_config()],
+                 bg='#2196F3', fg='white', font=('Arial', 12, 'bold'), 
+                 width=20, height=2).pack(pady=10)
+        
+        custom_info = tk.Label(button_frame,
+                              text="Указать свои параметры",
+                              font=('Arial', 9), fg='#aaa', bg='#2b2b2b')
+        custom_info.pack(pady=5)
+        
+        tk.Button(button_frame, text="Отмена", 
+                 command=dialog.destroy,
+                 bg='#666666', fg='white', width=20).pack(pady=10)
+        
+        # Центрируем диалог на экране
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+    
+    def create_default_config(self):
+        """Создание конфигурации по умолчанию"""
+        try:
+            config_path = self.project_root / "config.env"
+            
+            if config_path.exists():
+                result = messagebox.askyesno(
+                    "Файл существует",
+                    "Файл config.env уже существует.\n\nПерезаписать?"
+                )
+                if not result:
+                    return
+            
+            config_content = """# Steam Deck Enhancement Pack Configuration
+# Автоматически создано через GUI
+
+# Пользователь Steam Deck
+STEAMDECK_USER=deck
+
+# Домашняя директория пользователя
+STEAMDECK_HOME=/home/deck
+
+# Директория установки утилиты
+STEAMDECK_INSTALL_DIR=/home/deck/SteamDeck
+"""
+            
+            with open(config_path, 'w') as f:
+                f.write(config_content)
+            
+            self.logger.log_success("Config Creation", "Default config created")
+            messagebox.showinfo("Успех", 
+                f"Конфигурация создана:\n{config_path}\n\n"
+                "Используются значения по умолчанию.")
+        except Exception as e:
+            self.logger.log_error("Config Creation", str(e))
+            messagebox.showerror("Ошибка", f"Не удалось создать конфигурацию:\n{e}")
+    
+    def create_custom_config(self):
+        """Создание пользовательской конфигурации"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Настройка конфигурации")
+        dialog.geometry("600x500")
+        dialog.configure(bg='#2b2b2b')
+        dialog.resizable(False, False)
+        
+        # Центрируем диалог
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Заголовок
+        title_label = tk.Label(dialog, text="Пользовательская конфигурация", 
+                              font=('Arial', 14, 'bold'), fg='white', bg='#2b2b2b')
+        title_label.pack(pady=20)
+        
+        # Форма
+        form_frame = tk.Frame(dialog, bg='#2b2b2b')
+        form_frame.pack(padx=20, pady=10, fill='both', expand=True)
+        
+        # Пользователь
+        tk.Label(form_frame, text="Пользователь Steam Deck:", 
+                fg='white', bg='#2b2b2b', font=('Arial', 10)).pack(anchor='w', pady=5)
+        user_entry = tk.Entry(form_frame, font=('Arial', 10), width=40)
+        user_entry.insert(0, "deck")
+        user_entry.pack(pady=5)
+        
+        tk.Label(form_frame, text="(по умолчанию: deck)", 
+                fg='#aaa', bg='#2b2b2b', font=('Arial', 8)).pack(anchor='w')
+        
+        # Домашняя директория
+        tk.Label(form_frame, text="Домашняя директория:", 
+                fg='white', bg='#2b2b2b', font=('Arial', 10)).pack(anchor='w', pady=(15, 5))
+        home_entry = tk.Entry(form_frame, font=('Arial', 10), width=40)
+        home_entry.insert(0, "/home/deck")
+        home_entry.pack(pady=5)
+        
+        tk.Label(form_frame, text="(по умолчанию: /home/deck)", 
+                fg='#aaa', bg='#2b2b2b', font=('Arial', 8)).pack(anchor='w')
+        
+        # Директория установки
+        tk.Label(form_frame, text="Директория установки утилиты:", 
+                fg='white', bg='#2b2b2b', font=('Arial', 10)).pack(anchor='w', pady=(15, 5))
+        install_entry = tk.Entry(form_frame, font=('Arial', 10), width=40)
+        install_entry.insert(0, "/home/deck/SteamDeck")
+        install_entry.pack(pady=5)
+        
+        tk.Label(form_frame, text="(по умолчанию: /home/deck/SteamDeck)", 
+                fg='#aaa', bg='#2b2b2b', font=('Arial', 8)).pack(anchor='w')
+        
+        # Кнопки
+        button_frame = tk.Frame(dialog, bg='#2b2b2b')
+        button_frame.pack(pady=20)
+        
+        def save_custom_config():
+            user = user_entry.get().strip()
+            home = home_entry.get().strip()
+            install_dir = install_entry.get().strip()
+            
+            if not user or not home or not install_dir:
+                messagebox.showwarning("Предупреждение", "Все поля должны быть заполнены")
+                return
+            
+            try:
+                config_path = self.project_root / "config.env"
+                
+                if config_path.exists():
+                    result = messagebox.askyesno(
+                        "Файл существует",
+                        "Файл config.env уже существует.\n\nПерезаписать?"
+                    )
+                    if not result:
+                        return
+                
+                config_content = f"""# Steam Deck Enhancement Pack Configuration
+# Пользовательская конфигурация
+
+# Пользователь Steam Deck
+STEAMDECK_USER={user}
+
+# Домашняя директория пользователя
+STEAMDECK_HOME={home}
+
+# Директория установки утилиты
+STEAMDECK_INSTALL_DIR={install_dir}
+"""
+                
+                with open(config_path, 'w') as f:
+                    f.write(config_content)
+                
+                self.logger.log_success("Config Creation", 
+                                       f"Custom config: user={user}, home={home}")
+                dialog.destroy()
+                messagebox.showinfo("Успех", 
+                    f"Конфигурация создана:\n{config_path}\n\n"
+                    f"Пользователь: {user}\n"
+                    f"Домашняя директория: {home}\n"
+                    f"Директория установки: {install_dir}")
+            except Exception as e:
+                self.logger.log_error("Config Creation", str(e))
+                messagebox.showerror("Ошибка", f"Не удалось создать конфигурацию:\n{e}")
+        
+        tk.Button(button_frame, text="Сохранить", 
+                 command=save_custom_config,
+                 bg='#4CAF50', fg='white', font=('Arial', 10, 'bold'), 
+                 width=15).pack(side='left', padx=5)
+        
+        tk.Button(button_frame, text="Отмена", 
+                 command=dialog.destroy,
+                 bg='#666666', fg='white', width=15).pack(side='left', padx=5)
+        
+        # Центрируем диалог на экране
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+    
+    def export_logs(self):
+        """Экспорт логов для отправки разработчику"""
+        try:
+            # Выбираем файл для экспорта
+            file_path = filedialog.asksaveasfilename(
+                title="Экспорт логов",
+                defaultextension=".log",
+                filetypes=[("Log files", "*.log"), ("All files", "*.*")],
+                initialname=f"steamdeck_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            )
+            
+            if not file_path:
+                return
+            
+            # Экспортируем логи
+            if self.logger.export_logs(file_path):
+                self.logger.log_success("Log Export", f"Экспортировано в {file_path}")
+                messagebox.showinfo("Успех", 
+                    f"Логи успешно экспортированы:\n{file_path}\n\n"
+                    "Отправьте этот файл разработчику для диагностики проблем.")
+            else:
+                messagebox.showerror("Ошибка", "Не удалось экспортировать логи")
+        
+        except Exception as e:
+            self.logger.log_error("Log Export", str(e))
+            messagebox.showerror("Ошибка", f"Ошибка экспорта логов:\n{e}")
+    
     def run_cleanup(self):
         """Запуск очистки системы с выбором режима"""
         dialog = tk.Toplevel(self.root)
@@ -1394,8 +1711,8 @@ class SteamDeckGUI:
                 
     def show_about(self):
         """Окно 'О программе'"""
-        about_text = """
-Steam Deck Enhancement Pack GUI v0.1
+        about_text = f"""
+Steam Deck Enhancement Pack GUI v{self.version}
 
 Графический интерфейс для управления скриптами Steam Deck.
 
@@ -1408,9 +1725,17 @@ Steam Deck Enhancement Pack GUI v0.1
 • Offline-режим и трюки
 • Профили производительности
 • Управление медиа и ROM-ами
+• Система логирования
+• Конфигурируемые пути установки
 
 Автор: @ncux11
-Версия: 0.1.1 (Октябрь 2025)
+Версия: {self.version} (Октябрь 2025)
+
+⚠️ ДИСКЛЕЙМЕР:
+Программа поставляется "As Is" (как есть).
+Разработка ведется в свободное время.
+Консоль для тестирования отсутствует.
+Используйте на свой страх и риск.
         """
         
         messagebox.showinfo("О программе", about_text)
@@ -1954,6 +2279,192 @@ def check_dependencies():
     
     return True
 
+
+def check_installation():
+    """
+    Проверка установки утилиты в память Steam Deck
+    Проверяет наличие символических ссылок и desktop файла
+    """
+    try:
+        home_dir = Path.home()
+        
+        # Проверяем символические ссылки
+        steamdeck_utils_link = home_dir / "steamdeck-utils"
+        steamdeck_update_link = home_dir / "steamdeck-update"
+        
+        # Проверяем desktop файл
+        desktop_file = home_dir / ".local" / "share" / "applications" / "steamdeck-enhancement.desktop"
+        
+        links_exist = steamdeck_utils_link.exists() and steamdeck_update_link.exists()
+        desktop_exists = desktop_file.exists()
+        
+        return {
+            'installed': links_exist and desktop_exists,
+            'links_exist': links_exist,
+            'desktop_exists': desktop_exists,
+            'steamdeck_utils_link': steamdeck_utils_link,
+            'steamdeck_update_link': steamdeck_update_link,
+            'desktop_file': desktop_file
+        }
+    except Exception as e:
+        return {
+            'installed': False,
+            'error': str(e)
+        }
+
+
+def install_utility_now():
+    """
+    Установка утилиты в память Steam Deck
+    """
+    try:
+        # Запускаем установку через steamdeck_setup.sh
+        script_path = Path(__file__).parent / "steamdeck_setup.sh"
+        
+        if not script_path.exists():
+            messagebox.showerror("Ошибка", f"Скрипт установки не найден: {script_path}")
+            return
+        
+        # Запускаем установку
+        result = subprocess.run([
+            "bash", str(script_path), "install-utils"
+        ], capture_output=True, text=True, cwd=str(script_path.parent.parent))
+        
+        if result.returncode == 0:
+            messagebox.showinfo("Успех", 
+                "Утилита успешно установлена в память Steam Deck!\n\n"
+                "Теперь вы можете запускать её из меню приложений или через команду 'steamdeck-utils'.")
+        else:
+            messagebox.showerror("Ошибка установки", 
+                f"Ошибка при установке утилиты:\n\n{result.stderr}")
+    
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Не удалось установить утилиту: {e}")
+
+
+def show_first_launch_dialog():
+    """
+    Диалог первого запуска с предложением установки утилиты
+    """
+    root = tk.Tk()
+    root.withdraw()  # Скрываем главное окно
+    
+    # Создаем диалог
+    dialog = tk.Toplevel(root)
+    dialog.title("Steam Deck Enhancement Pack - Первый запуск")
+    dialog.geometry("600x400")
+    dialog.configure(bg='#2b2b2b')
+    dialog.resizable(False, False)
+    
+    # Центрируем диалог
+    dialog.transient(root)
+    dialog.grab_set()
+    
+    # Заголовок
+    title_label = tk.Label(dialog, 
+                          text="Добро пожаловать в Steam Deck Enhancement Pack!",
+                          font=('Arial', 16, 'bold'), 
+                          fg='#4CAF50', 
+                          bg='#2b2b2b')
+    title_label.pack(pady=20)
+    
+    # Проверяем установку
+    installation_status = check_installation()
+    
+    if installation_status.get('installed', False):
+        # Утилита уже установлена
+        status_text = "✅ Утилита уже установлена в память Steam Deck"
+        status_color = '#4CAF50'
+        button_text = "Продолжить"
+        button_command = lambda: [dialog.destroy(), root.destroy()]
+    else:
+        # Утилита не установлена
+        status_text = "⚠️ Утилита не установлена в память Steam Deck"
+        status_color = '#FF9800'
+        button_text = "Установить сейчас"
+        button_command = lambda: [dialog.destroy(), root.destroy(), install_utility_now()]
+    
+    status_label = tk.Label(dialog, 
+                           text=status_text,
+                           font=('Arial', 12), 
+                           fg=status_color, 
+                           bg='#2b2b2b')
+    status_label.pack(pady=10)
+    
+    # Описание
+    if not installation_status.get('installed', False):
+        desc_text = """
+Для удобного использования рекомендуется установить утилиту в память Steam Deck.
+
+Это создаст:
+• Символические ссылки для быстрого запуска
+• Ярлык в меню приложений
+• Автоматическое обновление
+
+Вы можете установить утилиту сейчас или сделать это позже через меню "Система" → "Установить утилиту".
+        """
+    else:
+        desc_text = """
+Утилита готова к использованию!
+
+Все функции доступны через графический интерфейс.
+        """
+    
+    desc_label = tk.Label(dialog, 
+                         text=desc_text.strip(),
+                         font=('Arial', 10), 
+                         fg='white', 
+                         bg='#2b2b2b',
+                         justify='left')
+    desc_label.pack(pady=20, padx=20)
+    
+    # Кнопки
+    button_frame = tk.Frame(dialog, bg='#2b2b2b')
+    button_frame.pack(pady=20)
+    
+    if not installation_status.get('installed', False):
+        # Кнопка "Установить сейчас"
+        install_btn = tk.Button(button_frame, 
+                               text="Установить сейчас",
+                               command=lambda: [dialog.destroy(), root.destroy(), install_utility_now()],
+                               bg='#4CAF50', 
+                               fg='white', 
+                               font=('Arial', 12, 'bold'),
+                               width=20, 
+                               height=2)
+        install_btn.pack(side='left', padx=10)
+        
+        # Кнопка "Позже"
+        later_btn = tk.Button(button_frame, 
+                             text="Позже",
+                             command=lambda: [dialog.destroy(), root.destroy()],
+                             bg='#666666', 
+                             fg='white', 
+                             font=('Arial', 12),
+                             width=20, 
+                             height=2)
+        later_btn.pack(side='left', padx=10)
+    else:
+        # Кнопка "Продолжить"
+        continue_btn = tk.Button(button_frame, 
+                                text="Продолжить",
+                                command=lambda: [dialog.destroy(), root.destroy()],
+                                bg='#4CAF50', 
+                                fg='white', 
+                                font=('Arial', 12, 'bold'),
+                                width=20, 
+                                height=2)
+        continue_btn.pack(pady=10)
+    
+    # Центрируем диалог на экране
+    dialog.update_idletasks()
+    x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+    y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+    dialog.geometry(f"+{x}+{y}")
+    
+    dialog.mainloop()
+
+
 def main():
     # Проверяем зависимости
     if not check_dependencies():
@@ -1969,6 +2480,13 @@ def main():
         print(f"Текущая директория скрипта: {script_dir}")
         print(f"Ожидаемая корневая директория: {project_root}")
         sys.exit(1)
+    
+    # Проверяем установку при первом запуске
+    installation_status = check_installation()
+    if not installation_status.get('installed', False):
+        # Показываем диалог первого запуска
+        show_first_launch_dialog()
+        return
     
     # Создаем главное окно
     root = tk.Tk()

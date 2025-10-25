@@ -3,7 +3,7 @@
 # Steam Deck Update Script
 # Скрипт для обновления Steam Deck Enhancement Pack через GitHub
 # Автор: @ncux11
-# Версия: 0.1.1 (Октябрь 2025)
+# Версия: динамическая (читается из VERSION)
 
 set -e  # Выход при ошибке
 
@@ -14,14 +14,35 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Загружаем конфигурацию если существует
+CONFIG_FILE="$(dirname "$(dirname "$(readlink -f "$0")")")/config.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+    print_message "Загружена конфигурация из $CONFIG_FILE"
+fi
+
+# Определяем пользователя и пути установки
+DECK_USER="${STEAMDECK_USER:-deck}"
+DECK_HOME="${STEAMDECK_HOME:-/home/$DECK_USER}"
+INSTALL_DIR="${STEAMDECK_INSTALL_DIR:-$DECK_HOME/SteamDeck}"
+
 # Конфигурация
 REPO_URL="https://github.com/ncux-ad/SteamDeck_start.git"
 
 # Определяем текущее местоположение утилиты
 CURRENT_DIR=$(dirname "$(readlink -f "$0")")
-INSTALL_DIR=$(dirname "$CURRENT_DIR")
 BACKUP_DIR="${INSTALL_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
 TEMP_DIR="/tmp/steamdeck_update"
+
+# Функция для получения версии
+get_version() {
+    local version_file="$(dirname "$(dirname "$(readlink -f "$0")")")/VERSION"
+    if [[ -f "$version_file" ]]; then
+        cat "$version_file" | tr -d '\n'
+    else
+        echo "0.1.3"  # Fallback версия
+    fi
+}
 
 # Функции для вывода
 print_debug() {
@@ -172,7 +193,7 @@ update_utility() {
     # Устанавливаем права доступа
     # Проверяем, есть ли пользователь deck
     if id "deck" &>/dev/null; then
-        chown -R deck:deck "$INSTALL_DIR"
+        chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
     else
         print_warning "Пользователь 'deck' не найден, пропускаем chown"
     fi
@@ -180,18 +201,18 @@ update_utility() {
     chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
     chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
     
-    # Обновляем символические ссылки (только если пользователь deck существует)
-    if id "deck" &>/dev/null; then
+    # Обновляем символические ссылки (только если пользователь существует)
+    if id "$DECK_USER" &>/dev/null; then
         print_message "Обновление символических ссылок..."
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_setup.sh" "/home/deck/steamdeck-setup" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_gui.py" "/home/deck/steamdeck-gui" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_backup.sh" "/home/deck/steamdeck-backup" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_cleanup.sh" "/home/deck/steamdeck-cleanup" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_optimizer.sh" "/home/deck/steamdeck-optimizer" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_microsd.sh" "/home/deck/steamdeck-microsd" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_update.sh" "/home/deck/steamdeck-update" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_setup.sh" "$DECK_HOME/steamdeck-setup" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_gui.py" "$DECK_HOME/steamdeck-gui" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_backup.sh" "$DECK_HOME/steamdeck-backup" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_cleanup.sh" "$DECK_HOME/steamdeck-cleanup" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_optimizer.sh" "$DECK_HOME/steamdeck-optimizer" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_microsd.sh" "$DECK_HOME/steamdeck-microsd" 2>/dev/null || true
+        ln -sf "$INSTALL_DIR/scripts/steamdeck_update.sh" "$DECK_HOME/steamdeck-update" 2>/dev/null || true
     else
-        print_warning "Пользователь 'deck' не найден, пропускаем создание символических ссылок"
+        print_warning "Пользователь '$DECK_USER' не найден, пропускаем создание символических ссылок"
     fi
     
     # Очищаем временную папку
@@ -236,7 +257,7 @@ rollback_update() {
         mv "$BACKUP_DIR" "$INSTALL_DIR"
         
         # Восстанавливаем права доступа
-        chown -R deck:deck "$INSTALL_DIR"
+        chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
         chmod -R 755 "$INSTALL_DIR"
         chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
         chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
