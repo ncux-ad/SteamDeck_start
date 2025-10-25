@@ -95,13 +95,36 @@ check_git() {
 
 # Функция для получения текущей версии
 get_current_version() {
-    # Сначала пробуем найти VERSION в текущей директории
-    local version_file="$(dirname "$(dirname "$(readlink -f "$0")")")/VERSION"
-    if [[ -f "$version_file" ]]; then
-        cat "$version_file" | tr -d '\n'
+    # Определяем текущую директорию скрипта
+    local script_dir="$(dirname "$(readlink -f "$0")")"
+    local project_root="$(dirname "$script_dir")"
+    
+    # Пробуем найти VERSION в разных местах
+    local version_file=""
+    
+    # 1. В директории проекта (где запущен скрипт)
+    if [[ -f "$project_root/VERSION" ]]; then
+        version_file="$project_root/VERSION"
+    # 2. В установленной директории
     elif [[ -f "$INSTALL_DIR/VERSION" ]]; then
-        cat "$INSTALL_DIR/VERSION" | tr -d '\n'
+        version_file="$INSTALL_DIR/VERSION"
+    # 3. В текущей рабочей директории
+    elif [[ -f "./VERSION" ]]; then
+        version_file="./VERSION"
+    # 4. В домашней директории пользователя
+    elif [[ -f "$DECK_HOME/SteamDeck/VERSION" ]]; then
+        version_file="$DECK_HOME/SteamDeck/VERSION"
+    fi
+    
+    if [[ -n "$version_file" ]]; then
+        print_debug "Найден файл VERSION: $version_file"
+        cat "$version_file" | tr -d '\n'
     else
+        print_debug "Файл VERSION не найден в:"
+        print_debug "  - $project_root/VERSION"
+        print_debug "  - $INSTALL_DIR/VERSION"
+        print_debug "  - ./VERSION"
+        print_debug "  - $DECK_HOME/SteamDeck/VERSION"
         echo "unknown"
     fi
 }
@@ -256,7 +279,9 @@ update_utility() {
 check_updates() {
     print_header "ПРОВЕРКА ОБНОВЛЕНИЙ"
     
+    print_debug "Поиск текущей версии..."
     local current_version=$(get_current_version)
+    print_debug "Получение последней версии с GitHub..."
     local latest_version=$(get_latest_version)
     
     print_message "Текущая версия: $current_version"
