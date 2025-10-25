@@ -274,13 +274,38 @@ update_utility() {
             cp -r "$user_config" "$TEMP_DIR/"
         fi
         
-        # Удаляем старую версию
-        print_message "Удаление старой версии..."
-        rm -rf "$PROJECT_ROOT"/*
+        # Удаляем старую версию (с проверкой прав доступа)
+        print_message "Проверка прав доступа для удаления старой версии..."
+        if [[ -w "$PROJECT_ROOT" ]]; then
+            print_message "Удаление старой версии без sudo..."
+            rm -rf "$PROJECT_ROOT"/*
+        else
+            print_message "Требуются права администратора для удаления старой версии..."
+            # Проверяем, можем ли мы удалить с sudo
+            if sudo -n true 2>/dev/null; then
+                sudo rm -rf "$PROJECT_ROOT"/*
+            else
+                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
+                print_error "sudo bash scripts/steamdeck_update.sh update"
+                return 1
+            fi
+        fi
         
-        # Копируем новую версию
-        print_message "Копирование новой версии..."
-        cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"
+        # Копируем новую версию (с проверкой прав доступа)
+        print_message "Проверка прав доступа для копирования новой версии..."
+        if [[ -w "$PROJECT_ROOT" ]]; then
+            print_message "Копирование новой версии без sudo..."
+            cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"
+        else
+            print_message "Требуются права администратора для копирования новой версии..."
+            if sudo -n true 2>/dev/null; then
+                sudo cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"
+            else
+                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
+                print_error "sudo bash scripts/steamdeck_update.sh update"
+                return 1
+            fi
+        fi
         
     else
         print_error "Не найдена директория для обновления"
@@ -312,10 +337,21 @@ update_utility() {
         chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
         chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
     elif [[ -d "$PROJECT_ROOT" ]]; then
-        # Для утилиты на флешке
-        chmod -R 755 "$PROJECT_ROOT"
-        chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
-        chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
+        # Для утилиты на флешке (с проверкой прав доступа)
+        print_message "Установка прав доступа для обновленных файлов..."
+        if [[ -w "$PROJECT_ROOT" ]]; then
+            chmod -R 755 "$PROJECT_ROOT"
+            chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
+            chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
+        else
+            if sudo -n true 2>/dev/null; then
+                sudo chmod -R 755 "$PROJECT_ROOT"
+                sudo chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
+                sudo chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
+            else
+                print_warning "Не удалось установить права доступа без sudo"
+            fi
+        fi
     fi
     
     # Обновляем символические ссылки (только если пользователь существует)
