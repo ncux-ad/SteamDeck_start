@@ -111,15 +111,15 @@ class SteamDeckGUI:
         row1.pack(pady=5)
         
         ttk.Button(row1, text="Настройка системы", 
-                  command=lambda: self.run_script_with_sudo("steamdeck_setup.sh", "setup"),
+                  command=self.run_system_setup,
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row1, text="Резервная копия", 
-                  command=lambda: self.run_script_with_sudo("steamdeck_backup.sh", "backup"),
+                  command=self.run_backup,
                   width=20).pack(side='left', padx=5)
         
         ttk.Button(row1, text="Очистка системы", 
-                  command=lambda: self.run_script_with_sudo("steamdeck_cleanup.sh", "safe"),
+                  command=self.run_cleanup,
                   width=20).pack(side='left', padx=5)
         
         # Вторая строка кнопок
@@ -976,17 +976,28 @@ class SteamDeckGUI:
         # Показываем индикатор загрузки
         self.show_progress("Проверка обновлений...")
     
-    def show_update_result(self, result):
-        """Показать результат проверки обновлений"""
+    def show_update_result(self, result, operation="check"):
+        """Показать результат операций с обновлениями"""
         self.hide_progress()
         
+        # Определяем заголовок в зависимости от операции
+        if operation == "check":
+            title = "Результат проверки обновлений"
+        elif operation == "update":
+            title = "Результат обновления утилиты"
+        elif operation == "rollback":
+            title = "Результат отката обновления"
+        else:
+            title = "Результат операции"
+        
         dialog = tk.Toplevel(self.root)
-        dialog.title("Результат проверки обновлений")
-        dialog.geometry("600x400")
+        dialog.title(title)
+        dialog.geometry("700x500")
         dialog.configure(bg='#2b2b2b')
         
         # Заголовок
-        title_label = tk.Label(dialog, text="Проверка обновлений Steam Deck Enhancement Pack", 
+        title_text = f"{title} - Steam Deck Enhancement Pack"
+        title_label = tk.Label(dialog, text=title_text, 
                               font=('Arial', 14, 'bold'), fg='white', bg='#2b2b2b')
         title_label.pack(pady=10)
         
@@ -1016,16 +1027,40 @@ class SteamDeckGUI:
         text_widget.insert(tk.END, "\n=== АНАЛИЗ РЕЗУЛЬТАТА ===\n")
         
         if result.returncode == 0:
-            if "Доступно обновление" in result.stdout:
-                text_widget.insert(tk.END, "✅ Доступно обновление!\n")
-                text_widget.insert(tk.END, "Нажмите 'Обновить утилиту' для установки.\n")
-            elif "последняя версия" in result.stdout:
-                text_widget.insert(tk.END, "✅ У вас установлена последняя версия.\n")
+            if operation == "check":
+                if "Доступно обновление" in result.stdout:
+                    text_widget.insert(tk.END, "✅ Доступно обновление!\n")
+                    text_widget.insert(tk.END, "Нажмите 'Обновить утилиту' для установки.\n")
+                elif "последняя версия" in result.stdout:
+                    text_widget.insert(tk.END, "✅ У вас установлена последняя версия.\n")
+                else:
+                    text_widget.insert(tk.END, "ℹ️ Проверка завершена.\n")
+            elif operation == "update":
+                if "Обновление завершено" in result.stdout or "установлен" in result.stdout:
+                    text_widget.insert(tk.END, "✅ Обновление выполнено успешно!\n")
+                    text_widget.insert(tk.END, "Утилита обновлена до последней версии.\n")
+                else:
+                    text_widget.insert(tk.END, "ℹ️ Обновление завершено.\n")
+            elif operation == "rollback":
+                if "Откат завершен" in result.stdout or "восстановлен" in result.stdout:
+                    text_widget.insert(tk.END, "✅ Откат выполнен успешно!\n")
+                    text_widget.insert(tk.END, "Предыдущая версия восстановлена.\n")
+                else:
+                    text_widget.insert(tk.END, "ℹ️ Откат завершен.\n")
             else:
-                text_widget.insert(tk.END, "ℹ️ Проверка завершена.\n")
+                text_widget.insert(tk.END, "✅ Операция выполнена успешно.\n")
         else:
-            text_widget.insert(tk.END, "❌ Ошибка при проверке обновлений.\n")
-            text_widget.insert(tk.END, "Проверьте подключение к интернету.\n")
+            if operation == "check":
+                text_widget.insert(tk.END, "❌ Ошибка при проверке обновлений.\n")
+                text_widget.insert(tk.END, "Проверьте подключение к интернету.\n")
+            elif operation == "update":
+                text_widget.insert(tk.END, "❌ Ошибка при обновлении.\n")
+                text_widget.insert(tk.END, "Проверьте подключение к интернету и права доступа.\n")
+            elif operation == "rollback":
+                text_widget.insert(tk.END, "❌ Ошибка при откате.\n")
+                text_widget.insert(tk.END, "Проверьте наличие резервной копии.\n")
+            else:
+                text_widget.insert(tk.END, "❌ Операция завершилась с ошибкой.\n")
         
         text_widget.config(state=tk.DISABLED)
         
@@ -1033,10 +1068,19 @@ class SteamDeckGUI:
         button_frame = tk.Frame(dialog, bg='#2b2b2b')
         button_frame.pack(pady=10)
         
-        if result.returncode == 0 and "Доступно обновление" in result.stdout:
+        # Кнопки в зависимости от операции и результата
+        if operation == "check" and result.returncode == 0 and "Доступно обновление" in result.stdout:
             tk.Button(button_frame, text="Обновить сейчас", 
                      command=lambda: [dialog.destroy(), self.update_utility()],
                      bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+        elif operation == "update" and result.returncode == 0:
+            tk.Button(button_frame, text="Проверить обновления", 
+                     command=lambda: [dialog.destroy(), self.check_updates()],
+                     bg='#2196F3', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+        elif operation == "rollback" and result.returncode == 0:
+            tk.Button(button_frame, text="Проверить обновления", 
+                     command=lambda: [dialog.destroy(), self.check_updates()],
+                     bg='#2196F3', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
         
         tk.Button(button_frame, text="Закрыть", 
                  command=dialog.destroy,
@@ -1057,7 +1101,7 @@ class SteamDeckGUI:
         )
         
         if result:
-            self.run_script_with_progress("steamdeck_update.sh", "update", "Обновление утилиты...")
+            self.run_update_with_dialog("steamdeck_update.sh", "update", "Обновление утилиты...")
     
     def rollback_update(self):
         """Откат последнего обновления"""
@@ -1068,7 +1112,129 @@ class SteamDeckGUI:
         )
         
         if result:
-            self.run_script("steamdeck_update.sh", "rollback", "Откат обновления...")
+            self.run_update_with_dialog("steamdeck_update.sh", "rollback", "Откат обновления...")
+    
+    def run_system_setup(self):
+        """Запуск настройки системы с подтверждением"""
+        result = messagebox.askyesno(
+            "Настройка системы",
+            "Выполнить полную настройку Steam Deck?\n\n"
+            "Это займет несколько минут и включает:\n"
+            "• Отключение readonly режима\n"
+            "• Настройку pacman\n"
+            "• Установку базовых пакетов\n"
+            "• Установку AUR-хелпера\n"
+            "• Установку Wine и ProtonTricks\n"
+            "• Создание резервных копий\n\n"
+            "Продолжить?"
+        )
+        
+        if result:
+            self.run_script_with_progress("steamdeck_setup.sh", "setup", "Настройка системы Steam Deck...")
+    
+    def run_backup(self):
+        """Запуск резервного копирования с подтверждением"""
+        result = messagebox.askyesno(
+            "Резервное копирование",
+            "Создать резервную копию системы?\n\n"
+            "Будет создан архив с:\n"
+            "• Конфигурационными файлами\n"
+            "• Установленными пакетами\n"
+            "• Пользовательскими настройками\n"
+            "• Списком установленного ПО\n\n"
+            "Продолжить?"
+        )
+        
+        if result:
+            self.run_script_with_progress("steamdeck_backup.sh", "backup", "Создание резервной копии...")
+    
+    def run_cleanup(self):
+        """Запуск очистки системы с выбором режима"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Очистка системы")
+        dialog.geometry("500x400")
+        dialog.configure(bg='#2b2b2b')
+        
+        # Заголовок
+        title_label = tk.Label(dialog, text="Выберите режим очистки", 
+                              font=('Arial', 14, 'bold'), fg='white', bg='#2b2b2b')
+        title_label.pack(pady=20)
+        
+        # Описание режимов
+        info_frame = tk.Frame(dialog, bg='#2b2b2b')
+        info_frame.pack(fill='x', padx=20, pady=10)
+        
+        safe_text = """🟢 Безопасная очистка (рекомендуется):
+• Кэш pacman
+• Временные файлы
+• Логи системы
+• Кэш приложений"""
+        
+        full_text = """🟡 Полная очистка (осторожно):
+• Все вышеперечисленное
+• Неиспользуемые пакеты
+• Старые ядра
+• Кэш Steam"""
+        
+        tk.Label(info_frame, text=safe_text, fg='white', bg='#2b2b2b', 
+                font=('Arial', 10), justify='left').pack(anchor='w', pady=5)
+        
+        tk.Label(info_frame, text=full_text, fg='yellow', bg='#2b2b2b', 
+                font=('Arial', 10), justify='left').pack(anchor='w', pady=5)
+        
+        # Кнопки
+        button_frame = tk.Frame(dialog, bg='#2b2b2b')
+        button_frame.pack(pady=20)
+        
+        tk.Button(button_frame, text="Безопасная очистка", 
+                 command=lambda: [dialog.destroy(), self.run_script_with_progress("steamdeck_cleanup.sh", "safe", "Безопасная очистка системы...")],
+                 bg='#4CAF50', fg='white', font=('Arial', 12, 'bold'), width=20).pack(pady=5)
+        
+        tk.Button(button_frame, text="Полная очистка", 
+                 command=lambda: [dialog.destroy(), self.run_script_with_progress("steamdeck_cleanup.sh", "full", "Полная очистка системы...")],
+                 bg='#FF9800', fg='white', font=('Arial', 12, 'bold'), width=20).pack(pady=5)
+        
+        tk.Button(button_frame, text="Отмена", 
+                 command=dialog.destroy,
+                 bg='#666666', fg='white', width=20).pack(pady=5)
+    
+    def run_update_with_dialog(self, script_name, args="", message=""):
+        """Запуск скрипта обновления с диалогом результата"""
+        import subprocess
+        import threading
+        
+        def run_update_thread():
+            try:
+                script_path = self.scripts_dir / script_name
+                if not script_path.exists():
+                    self.root.after(0, lambda: self.show_update_error(f"Скрипт {script_name} не найден"))
+                    return
+                
+                # Показываем прогресс
+                self.root.after(0, lambda: self.show_progress(message or f"Выполнение {script_name}..."))
+                
+                # Запускаем скрипт
+                result = subprocess.run(
+                    ["bash", str(script_path), args] if args else ["bash", str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    cwd=os.path.expanduser("~/SteamDeck")
+                )
+                
+                # Скрываем прогресс
+                self.root.after(0, self.hide_progress)
+                
+                # Показываем результат в диалоге
+                self.root.after(0, lambda: self.show_update_result(result, args))
+                
+            except Exception as e:
+                self.root.after(0, self.hide_progress)
+                self.root.after(0, lambda: self.show_update_error(str(e)))
+        
+        # Запускаем в отдельном потоке
+        thread = threading.Thread(target=run_update_thread)
+        thread.daemon = True
+        thread.start()
     
     def run_script_with_progress(self, script_name, args="", message=""):
         """Запуск скрипта с прогресс-баром и детальным выводом"""
