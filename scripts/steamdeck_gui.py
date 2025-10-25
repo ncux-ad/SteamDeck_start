@@ -19,8 +19,14 @@ from pathlib import Path
 from datetime import datetime
 
 # Импорт системы логирования
+import sys
+# Добавляем директорию scripts в Python path
+scripts_dir = Path(__file__).parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
 try:
-    from steamdeck_logger import SteamDeckLogger
+    from steamdeck_logger import SteamDeckLogger  # type: ignore
 except ImportError:
     # Fallback если модуль логирования недоступен
     class SteamDeckLogger:
