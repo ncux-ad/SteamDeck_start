@@ -685,65 +685,66 @@ install_steamdeck_utils() {
     # Создаем директорию для утилит
     if [[ ! -d "$utils_dir" ]]; then
         print_message "Создание директории $utils_dir..."
-        mkdir -p "$utils_dir"
-        chown deck:deck "$utils_dir"
+        run_sudo mkdir -p "$utils_dir"
+        run_sudo chown $DECK_USER:$DECK_USER "$utils_dir"
     fi
     
     # Копируем все файлы проекта
     print_message "Копирование файлов утилиты..."
-    cp -r "$current_dir"/* "$utils_dir/" 2>/dev/null || {
+    run_sudo cp -r "$current_dir"/* "$utils_dir/" 2>/dev/null || {
         print_warning "Не удалось скопировать все файлы"
         print_message "Попытка копирования основных компонентов..."
         
         # Копируем основные скрипты
-        mkdir -p "$utils_dir/scripts"
-        cp "$current_dir"/*.sh "$utils_dir/scripts/" 2>/dev/null || true
-        cp "$current_dir"/*.py "$utils_dir/scripts/" 2>/dev/null || true
+        run_sudo mkdir -p "$utils_dir/scripts"
+        run_sudo cp "$current_dir"/*.sh "$utils_dir/scripts/" 2>/dev/null || true
+        run_sudo cp "$current_dir"/*.py "$utils_dir/scripts/" 2>/dev/null || true
         
         # Копируем руководства
-        mkdir -p "$utils_dir/guides"
-        cp "$current_dir/guides"/*.md "$utils_dir/guides/" 2>/dev/null || true
+        run_sudo mkdir -p "$utils_dir/guides"
+        run_sudo cp "$current_dir/guides"/*.md "$utils_dir/guides/" 2>/dev/null || true
         
         # Копируем конфигурационные файлы
-        cp "$current_dir"/*.md "$utils_dir/" 2>/dev/null || true
-        cp "$current_dir"/*.yml "$utils_dir/" 2>/dev/null || true
-        cp "$current_dir"/*.sh "$utils_dir/" 2>/dev/null || true
+        run_sudo cp "$current_dir"/*.md "$utils_dir/" 2>/dev/null || true
+        run_sudo cp "$current_dir"/*.yml "$utils_dir/" 2>/dev/null || true
+        run_sudo cp "$current_dir"/*.sh "$utils_dir/" 2>/dev/null || true
     }
     
     # Устанавливаем права доступа
     print_message "Установка прав доступа..."
-    chown -R deck:deck "$utils_dir"
-    chmod -R 755 "$utils_dir"
-    chmod +x "$utils_dir/scripts"/*.sh 2>/dev/null || true
-    chmod +x "$utils_dir"/*.sh 2>/dev/null || true
+    run_sudo chown -R $DECK_USER:$DECK_USER "$utils_dir"
+    run_sudo chmod -R 755 "$utils_dir"
+    run_sudo chmod +x "$utils_dir/scripts"/*.sh 2>/dev/null || true
+    run_sudo chmod +x "$utils_dir"/*.sh 2>/dev/null || true
     
     # Создаем символические ссылки для быстрого доступа
     print_message "Создание символических ссылок..."
     
     # Ссылка на главный скрипт настройки
-    ln -sf "$utils_dir/scripts/steamdeck_setup.sh" "$DECK_HOME/steamdeck-setup" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_setup.sh" "$DECK_HOME/steamdeck-setup" 2>/dev/null || true
     
     # Ссылка на GUI
-    ln -sf "$utils_dir/scripts/steamdeck_gui.py" "$DECK_HOME/steamdeck-gui" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_gui.py" "$DECK_HOME/steamdeck-gui" 2>/dev/null || true
     
     # Ссылка на скрипт бэкапа
-    ln -sf "$utils_dir/scripts/steamdeck_backup.sh" "$DECK_HOME/steamdeck-backup" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_backup.sh" "$DECK_HOME/steamdeck-backup" 2>/dev/null || true
     
     # Ссылка на скрипт очистки
-    ln -sf "$utils_dir/scripts/steamdeck_cleanup.sh" "$DECK_HOME/steamdeck-cleanup" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_cleanup.sh" "$DECK_HOME/steamdeck-cleanup" 2>/dev/null || true
     
     # Ссылка на скрипт оптимизации
-    ln -sf "$utils_dir/scripts/steamdeck_optimizer.sh" "$DECK_HOME/steamdeck-optimizer" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_optimizer.sh" "$DECK_HOME/steamdeck-optimizer" 2>/dev/null || true
     
     # Ссылка на скрипт MicroSD
-    ln -sf "$utils_dir/scripts/steamdeck_microsd.sh" "$DECK_HOME/steamdeck-microsd" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_microsd.sh" "$DECK_HOME/steamdeck-microsd" 2>/dev/null || true
     
     # Ссылка на скрипт обновления
-    ln -sf "$utils_dir/scripts/steamdeck_update.sh" "$DECK_HOME/steamdeck-update" 2>/dev/null || true
+    run_sudo ln -sf "$utils_dir/scripts/steamdeck_update.sh" "$DECK_HOME/steamdeck-update" 2>/dev/null || true
     
     # Создаем desktop файл для GUI
     print_message "Создание desktop файла для GUI..."
-    cat > "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop" << 'EOF'
+    run_sudo mkdir -p "$DECK_HOME/.local/share/applications"
+    run_sudo cat > "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -756,15 +757,15 @@ Categories=Utility;System;
 StartupNotify=true
 EOF
     
-    chmod +x "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
-    chown $DECK_USER:$DECK_USER "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    run_sudo chmod +x "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    run_sudo chown $DECK_USER:$DECK_USER "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
     
     # Обновляем desktop базу
-    update-desktop-database "$DECK_HOME/.local/share/applications" 2>/dev/null || true
+    run_sudo update-desktop-database "$DECK_HOME/.local/share/applications" 2>/dev/null || true
     
     # Создаем скрипт быстрого запуска
     print_message "Создание скрипта быстрого запуска..."
-    cat > "$DECK_HOME/steamdeck-utils" << 'EOF'
+    run_sudo cat > "$DECK_HOME/steamdeck-utils" << 'EOF'
 #!/bin/bash
 # Steam Deck Enhancement Pack - Быстрый запуск
 # Автор: @ncux11
@@ -786,8 +787,8 @@ echo "Или запустите GUI: python3 ~/SteamDeck/scripts/steamdeck_gui.p
 echo
 EOF
     
-    chmod +x "$DECK_HOME/steamdeck-utils"
-    chown $DECK_USER:$DECK_USER "$DECK_HOME/steamdeck-utils"
+    run_sudo chmod +x "$DECK_HOME/steamdeck-utils"
+    run_sudo chown $DECK_USER:$DECK_USER "$DECK_HOME/steamdeck-utils"
     
     # Копируем готовые обложки утилиты
     print_message "Копирование обложек утилиты..."
@@ -795,9 +796,9 @@ EOF
     local artwork_dest_dir="$utils_dir/artwork/utils"
     
     if [[ -d "$artwork_source_dir" ]]; then
-        mkdir -p "$artwork_dest_dir"
-        cp -r "$artwork_source_dir"/* "$artwork_dest_dir/" 2>/dev/null || true
-        chown -R deck:deck "$artwork_dest_dir" 2>/dev/null || true
+        run_sudo mkdir -p "$artwork_dest_dir"
+        run_sudo cp -r "$artwork_source_dir"/* "$artwork_dest_dir/" 2>/dev/null || true
+        run_sudo chown -R $DECK_USER:$DECK_USER "$artwork_dest_dir" 2>/dev/null || true
         print_success "Обложки утилиты скопированы"
     else
         print_warning "Папка с обложками не найдена: $artwork_source_dir"
@@ -805,7 +806,7 @@ EOF
     
     # Создаем README для пользователя
     print_message "Создание пользовательского README..."
-    cat > "$INSTALL_DIR/QUICK_START.md" << 'EOF'
+    run_sudo cat > "$INSTALL_DIR/QUICK_START.md" << 'EOF'
 # Steam Deck Enhancement Pack - Быстрый старт
 
 ## 🚀 Быстрый запуск
@@ -860,7 +861,7 @@ python3 ~/SteamDeck/scripts/steamdeck_gui.py
 *Автор: @ncux11*
 EOF
     
-    chown $DECK_USER:$DECK_USER "$INSTALL_DIR/QUICK_START.md"
+    run_sudo chown $DECK_USER:$DECK_USER "$INSTALL_DIR/QUICK_START.md"
     
     print_success "Steam Deck Enhancement Pack установлен в $utils_dir"
     print_message "Созданы символические ссылки для быстрого доступа"
