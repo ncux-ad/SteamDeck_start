@@ -17,6 +17,23 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
+# Определяем текущую директорию скрипта (глобально)
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Загружаем конфигурацию если существует
+CONFIG_FILE="$PROJECT_ROOT/config.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+    print_message "Загружена конфигурация из $CONFIG_FILE"
+fi
+
+# Определяем пользователя и пути установки
+DECK_USER="${STEAMDECK_USER:-deck}"
+DECK_HOME="${STEAMDECK_HOME:-/home/$DECK_USER}"
+INSTALL_DIR="${STEAMDECK_INSTALL_DIR:-$DECK_HOME/SteamDeck}"
+
 # Функции вывода
 print_header() {
     echo -e "${CYAN}=== $1 ===${NC}"
@@ -51,8 +68,8 @@ check_permissions() {
 install_steamdeck_utils() {
     print_header "УСТАНОВКА STEAM DECK ENHANCEMENT PACK"
     
-    local utils_dir="/home/deck/SteamDeck"
-    local current_dir=$(dirname "$(readlink -f "$0")")
+    local utils_dir="$INSTALL_DIR"
+    local current_dir="$PROJECT_ROOT"
     
     print_info "Текущая директория: $current_dir"
     print_info "Целевая директория: $utils_dir"
@@ -61,7 +78,7 @@ install_steamdeck_utils() {
     if [[ ! -d "$utils_dir" ]]; then
         print_message "Создание директории $utils_dir..."
         mkdir -p "$utils_dir"
-        chown deck:deck "$utils_dir"
+        chown $DECK_USER:$DECK_USER "$utils_dir"
     else
         print_warning "Директория $utils_dir уже существует"
         read -p "Перезаписать существующие файлы? (y/N): " overwrite
@@ -109,52 +126,52 @@ install_steamdeck_utils() {
     print_message "Создание символических ссылок..."
     
     # Ссылка на главный скрипт настройки
-    ln -sf "$utils_dir/scripts/steamdeck_setup.sh" "/home/deck/steamdeck-setup" 2>/dev/null || true
+    ln -sf "$utils_dir/scripts/steamdeck_setup.sh" "$DECK_HOME/steamdeck-setup" 2>/dev/null || true
     print_info "Создана ссылка: ~/steamdeck-setup"
     
     # Ссылка на GUI
-    ln -sf "$utils_dir/scripts/steamdeck_gui.py" "/home/deck/steamdeck-gui" 2>/dev/null || true
+    ln -sf "$utils_dir/scripts/steamdeck_gui.py" "$DECK_HOME/steamdeck-gui" 2>/dev/null || true
     print_info "Создана ссылка: ~/steamdeck-gui"
     
     # Ссылка на скрипт бэкапа
-    ln -sf "$utils_dir/scripts/steamdeck_backup.sh" "/home/deck/steamdeck-backup" 2>/dev/null || true
+    ln -sf "$utils_dir/scripts/steamdeck_backup.sh" "$DECK_HOME/steamdeck-backup" 2>/dev/null || true
     print_info "Создана ссылка: ~/steamdeck-backup"
     
     # Ссылка на скрипт очистки
-    ln -sf "$utils_dir/scripts/steamdeck_cleanup.sh" "/home/deck/steamdeck-cleanup" 2>/dev/null || true
+    ln -sf "$utils_dir/scripts/steamdeck_cleanup.sh" "$DECK_HOME/steamdeck-cleanup" 2>/dev/null || true
     print_info "Создана ссылка: ~/steamdeck-cleanup"
     
     # Ссылка на скрипт оптимизации
-    ln -sf "$utils_dir/scripts/steamdeck_optimizer.sh" "/home/deck/steamdeck-optimizer" 2>/dev/null || true
+    ln -sf "$utils_dir/scripts/steamdeck_optimizer.sh" "$DECK_HOME/steamdeck-optimizer" 2>/dev/null || true
     print_info "Создана ссылка: ~/steamdeck-optimizer"
     
     # Ссылка на скрипт MicroSD
-    ln -sf "$utils_dir/scripts/steamdeck_microsd.sh" "/home/deck/steamdeck-microsd" 2>/dev/null || true
+    ln -sf "$utils_dir/scripts/steamdeck_microsd.sh" "$DECK_HOME/steamdeck-microsd" 2>/dev/null || true
     print_info "Создана ссылка: ~/steamdeck-microsd"
     
     # Создаем desktop файл для GUI
     print_message "Создание desktop файла для GUI..."
-    cat > "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop" << 'EOF'
+    cat > "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Steam Deck Enhancement Pack
 Comment=Утилиты для управления Steam Deck
-Exec=python3 /home/deck/SteamDeck/scripts/steamdeck_gui.py
+Exec=python3 $INSTALL_DIR/scripts/steamdeck_gui.py
 Icon=steam
 Terminal=false
 Categories=Utility;System;
 StartupNotify=true
 EOF
     
-    chmod +x "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop"
-    chown deck:deck "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    chmod +x "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    chown $DECK_USER:$DECK_USER "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
     print_success "Desktop файл создан"
     
     # Обновляем desktop базу
     print_message "Обновление desktop базы..."
     if command -v update-desktop-database &> /dev/null; then
-        update-desktop-database "/home/deck/.local/share/applications" 2>/dev/null || true
+        update-desktop-database "$DECK_HOME/.local/share/applications" 2>/dev/null || true
         print_success "Desktop база обновлена"
     else
         print_warning "update-desktop-database не найден, пропускаем"
@@ -162,7 +179,7 @@ EOF
     
     # Создаем скрипт быстрого запуска
     print_message "Создание скрипта быстрого запуска..."
-    cat > "/home/deck/steamdeck-utils" << 'EOF'
+    cat > "$DECK_HOME/steamdeck-utils" << EOF
 #!/bin/bash
 # Steam Deck Enhancement Pack - Быстрый запуск
 # Автор: @ncux11
@@ -179,12 +196,12 @@ echo "  steamdeck-cleanup   - Очистка системы"
 echo "  steamdeck-optimizer - Оптимизация"
 echo "  steamdeck-microsd   - Управление MicroSD"
 echo
-echo "Или запустите GUI: python3 ~/SteamDeck/scripts/steamdeck_gui.py"
+echo "Или запустите GUI: python3 $INSTALL_DIR/scripts/steamdeck_gui.py"
 echo
 EOF
     
-    chmod +x "/home/deck/steamdeck-utils"
-    chown deck:deck "/home/deck/steamdeck-utils"
+    chmod +x "$DECK_HOME/steamdeck-utils"
+    chown $DECK_USER:$DECK_USER "$DECK_HOME/steamdeck-utils"
     print_success "Скрипт быстрого запуска создан"
     
     # Копируем готовые обложки утилиты
@@ -203,7 +220,7 @@ EOF
     
     # Создаем README для пользователя
     print_message "Создание пользовательского README..."
-    cat > "/home/deck/SteamDeck/QUICK_START.md" << 'EOF'
+    cat > "$INSTALL_DIR/QUICK_START.md" << EOF
 # Steam Deck Enhancement Pack - Быстрый старт
 
 ## 🚀 Быстрый запуск
@@ -255,7 +272,7 @@ python3 ~/SteamDeck/scripts/steamdeck_gui.py
 *Автор: @ncux11*
 EOF
     
-    chown deck:deck "/home/deck/SteamDeck/QUICK_START.md"
+    chown $DECK_USER:$DECK_USER "$INSTALL_DIR/QUICK_START.md"
     print_success "README создан"
     
     print_success "Steam Deck Enhancement Pack установлен в $utils_dir"

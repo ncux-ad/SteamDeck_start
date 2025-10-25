@@ -41,7 +41,24 @@ print_info() {
 # Переменные
 STEAM_USER_DATA="$HOME/.steam/steam/userdata"
 STEAM_APPS="$HOME/.steam/steam/steamapps"
-ARTWORK_DIR="$HOME/SteamDeck/artwork"
+
+# Определяем текущую директорию скрипта (глобально)
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Загружаем конфигурацию если существует
+CONFIG_FILE="$PROJECT_ROOT/config.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+    print_message "Загружена конфигурация из $CONFIG_FILE"
+fi
+
+# Определяем пользователя и пути установки
+DECK_USER="${STEAMDECK_USER:-deck}"
+DECK_HOME="${STEAMDECK_HOME:-/home/$DECK_USER}"
+INSTALL_DIR="${STEAMDECK_INSTALL_DIR:-$DECK_HOME/SteamDeck}"
+ARTWORK_DIR="$INSTALL_DIR/artwork"
 GRID_DB_API="https://www.steamgriddb.com/api/v2"
 
 # Функция для создания директорий
