@@ -33,15 +33,28 @@ print_error() {
 
 # Функция для проверки прав root
 check_root() {
-    if [[ $EUID -eq 0 ]]; then
-        print_error "Не запускайте скрипт от имени root!"
+    # Проверяем, запущен ли скрипт напрямую от root (без sudo)
+    if [[ $EUID -eq 0 ]] && [[ -z "$SUDO_USER" ]]; then
+        print_error "Не запускайте скрипт напрямую от имени root!"
         print_message "Используйте: ./steamdeck_setup.sh"
         exit 1
+    fi
+    
+    # Если запущен с sudo, проверяем что SUDO_USER установлен
+    if [[ $EUID -eq 0 ]] && [[ -n "$SUDO_USER" ]]; then
+        print_message "Скрипт запущен с правами sudo от пользователя: $SUDO_USER"
     fi
 }
 
 # Функция для проверки пароля пользователя
 check_password() {
+    # Если уже запущен с sudo, проверяем что пароль уже введен
+    if [[ $EUID -eq 0 ]] && [[ -n "$SUDO_USER" ]]; then
+        print_message "Права sudo уже получены от пользователя: $SUDO_USER"
+        return 0
+    fi
+    
+    # Если запущен обычным пользователем, проверяем sudo
     if ! sudo -n true 2>/dev/null; then
         print_warning "Требуется ввести пароль пользователя"
         print_message "Убедитесь, что пароль установлен командой: passwd"
@@ -49,10 +62,22 @@ check_password() {
     fi
 }
 
+# Вспомогательная функция для выполнения команд с sudo
+run_sudo() {
+    if [[ $EUID -eq 0 ]]; then
+        # Если уже запущен с sudo, выполняем команду напрямую
+        "$@"
+    else
+        # Если запущен обычным пользователем, используем sudo
+        sudo "$@"
+    fi
+}
+
 # Функция для отключения readonly режима
 disable_readonly() {
     print_message "Отключение режима только для чтения..."
-    if sudo steamos-readonly disable; then
+    
+    if run_sudo steamos-readonly disable; then
         print_success "Режим только для чтения отключен"
         log_setup_state "readonly_disabled"
     else
@@ -64,7 +89,8 @@ disable_readonly() {
 # Функция для включения readonly режима
 enable_readonly() {
     print_message "Включение режима только для чтения..."
-    if sudo steamos-readonly enable; then
+    
+    if run_sudo steamos-readonly enable; then
         print_success "Режим только для чтения включен"
     else
         print_warning "Не удалось включить режим только для чтения"
@@ -166,7 +192,7 @@ restore_pacman_config() {
     local backup_conf="/etc/pacman.conf.backup"
     
     if [[ -f "$backup_conf" ]]; then
-        if sudo cp "$backup_conf" "$pacman_conf"; then
+        if run_sudo cp "$backup_conf" "$pacman_conf"; then
             print_success "pacman.conf восстановлен из бэкапа"
         else
             print_error "Не удалось восстановить pacman.conf"
@@ -182,7 +208,7 @@ restore_pacman_config() {
 create_default_pacman_config() {
     print_message "Создание стандартной конфигурации pacman.conf..."
     
-    sudo tee /etc/pacman.conf > /dev/null << 'EOF'
+    run_sudo tee /etc/pacman.conf > /dev/null << 'EOF'
 [options]
 HoldPkg     = pacman glibc
 Architecture = auto
@@ -207,13 +233,13 @@ EOF
 reset_pacman_key() {
     print_message "Сброс pacman-key..."
     
-    if sudo pacman-key --init; then
+    if run_sudo pacman-key --init; then
         print_success "pacman-key инициализирован"
     else
         print_warning "Не удалось инициализировать pacman-key"
     fi
     
-    if sudo pacman-key --populate archlinux; then
+    if run_sudo pacman-key --populate archlinux; then
         print_success "Ключи Arch Linux загружены"
     else
         print_warning "Не удалось загрузить ключи Arch Linux"
@@ -233,7 +259,7 @@ uninstall_packages() {
         for package in "${PACKAGES[@]}"; do
             if [[ -n "$package" ]]; then
                 print_message "Удаление пакета: $package"
-                if sudo pacman -R --noconfirm "$package" 2>/dev/null; then
+                if run_sudo pacman -R --noconfirm "$package" 2>/dev/null; then
                     print_success "Пакет $package удален"
                 else
                     print_warning "Не удалось удалить пакет $package"
@@ -291,13 +317,13 @@ restore_from_detailed_backup() {
     
     # Восстановление pacman.conf
     if [[ -f "$backup_dir/pacman.conf" ]]; then
-        sudo cp "$backup_dir/pacman.conf" /etc/pacman.conf
+        run_sudo cp "$backup_dir/pacman.conf" /etc/pacman.conf
         print_success "pacman.conf восстановлен"
     fi
     
     # Восстановление ключей
     if [[ -d "$backup_dir/gnupg" ]]; then
-        sudo cp -r "$backup_dir/gnupg" /etc/pacman.d/
+        run_sudo cp -r "$backup_dir/gnupg" /etc/pacman.d/
         print_success "Ключи pacman восстановлены"
     fi
     
@@ -313,7 +339,7 @@ configure_pacman() {
     
     # Создание резервной копии
     if [[ ! -f "$backup_file" ]]; then
-        sudo cp "$pacman_conf" "$backup_file"
+        run_sudo cp "$pacman_conf" "$backup_file"
         print_success "Создана резервная копия: $backup_file"
     fi
     
@@ -324,8 +350,8 @@ configure_pacman() {
     fi
     
     # Комментирование старой строки и добавление новой
-    sudo sed -i 's/^SigLevel.*= Required DatabaseOptional/#&/' "$pacman_conf"
-    sudo sed -i '/^#SigLevel.*= Required DatabaseOptional/a SigLevel = TrustAll' "$pacman_conf"
+    run_sudo sed -i 's/^SigLevel.*= Required DatabaseOptional/#&/' "$pacman_conf"
+    run_sudo sed -i '/^#SigLevel.*= Required DatabaseOptional/a SigLevel = TrustAll' "$pacman_conf"
     
     print_success "Pacman настроен для установки неподписанных пакетов"
     log_setup_state "pacman_configured"
@@ -334,7 +360,7 @@ configure_pacman() {
 # Функция для инициализации ключей
 init_keys() {
     print_message "Инициализация ключей pacman..."
-    if sudo pacman-key --init; then
+    if run_sudo pacman-key --init; then
         print_success "Ключи pacman инициализированы"
         log_setup_state "pacman_key_initialized"
     else
@@ -348,10 +374,10 @@ install_base_packages() {
     print_message "Установка базовых пакетов для разработки..."
     
     # Обновление базы данных пакетов
-    sudo pacman -Sy
+    run_sudo pacman -Sy
     
     # Установка базовых пакетов
-    if sudo pacman -S --needed base-devel git --noconfirm; then
+    if run_sudo pacman -S --needed base-devel git --noconfirm; then
         print_success "Базовые пакеты установлены"
         log_setup_state "packages_installed:base-devel git"
     else
@@ -396,7 +422,7 @@ install_wine() {
     if command -v wine &> /dev/null; then
         print_warning "Wine уже установлен"
     else
-        if sudo pacman -S wine --noconfirm; then
+        if run_sudo pacman -S wine --noconfirm; then
             print_success "Wine установлен"
         else
             print_warning "Не удалось установить Wine"
@@ -463,7 +489,7 @@ install_sniper() {
 # Функция для очистки кэша
 cleanup_cache() {
     print_message "Очистка кэша pacman..."
-    if sudo pacman -Sc --noconfirm; then
+    if run_sudo pacman -Sc --noconfirm; then
         print_success "Кэш очищен"
     else
         print_warning "Не удалось очистить кэш"
