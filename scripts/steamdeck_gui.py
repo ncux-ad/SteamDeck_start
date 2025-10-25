@@ -123,9 +123,17 @@ class SteamDeckGUI:
     
     def refresh_version(self):
         """Обновление версии в GUI"""
+        old_version = self.version
         self.version = self.get_version()
+        
         # Обновляем заголовок окна
         self.root.title(f"Steam Deck Enhancement Pack v{self.version}")
+        
+        # Логируем изменение версии
+        if old_version != self.version:
+            self.append_output(f"🔄 Версия обновлена: {old_version} → {self.version}")
+        else:
+            self.append_output(f"ℹ️ Версия остается: {self.version}")
         
     def create_widgets(self):
         # Главное меню
@@ -1170,9 +1178,16 @@ class SteamDeckGUI:
                      command=lambda: [dialog.destroy(), self.update_utility()],
                      bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
         elif operation == "update" and result.returncode == 0:
-            tk.Button(button_frame, text="Перезапустить GUI", 
-                     command=lambda: [dialog.destroy(), self.restart_gui()],
-                     bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+            # Проверяем, действительно ли обновление прошло успешно
+            update_successful = ("Обновление завершено" in result.stdout or 
+                               "установлен" in result.stdout or
+                               "Обновление выполнено успешно" in result.stdout)
+            
+            if update_successful:
+                tk.Button(button_frame, text="Перезапустить GUI", 
+                         command=lambda: [dialog.destroy(), self.restart_gui()],
+                         bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+            
             tk.Button(button_frame, text="Проверить обновления", 
                      command=lambda: [dialog.destroy(), self.check_updates()],
                      bg='#2196F3', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
@@ -1200,22 +1215,49 @@ class SteamDeckGUI:
         )
         
         if result:
-            # Обновляем версию перед перезапуском
-            self.refresh_version()
-            
-            # Сохраняем путь к обновленному скрипту
-            script_path = self.scripts_dir / "steamdeck_gui.py"
-            
-            # Закрываем текущее окно
-            self.root.destroy()
-            
-            # Запускаем новый экземпляр GUI
-            import subprocess
-            import sys
-            subprocess.Popen([sys.executable, str(script_path)])
-            
-            # Завершаем текущий процесс
-            sys.exit(0)
+            try:
+                # Сохраняем путь к обновленному скрипту
+                script_path = self.scripts_dir / "steamdeck_gui.py"
+                
+                # Проверяем, что скрипт существует
+                if not script_path.exists():
+                    messagebox.showerror("Ошибка", f"Скрипт GUI не найден: {script_path}")
+                    return
+                
+                # Создаем временный скрипт для перезапуска
+                restart_script = self.project_root / "restart_gui.sh"
+                restart_script_content = f"""#!/bin/bash
+# Временный скрипт для перезапуска GUI
+cd "{self.project_root}"
+python3 "{script_path}" &
+# Удаляем себя после запуска
+rm -f "{restart_script}"
+"""
+                
+                with open(restart_script, 'w') as f:
+                    f.write(restart_script_content)
+                
+                # Делаем скрипт исполняемым
+                os.chmod(restart_script, 0o755)
+                
+                # Запускаем скрипт перезапуска
+                import subprocess
+                subprocess.Popen([str(restart_script)], 
+                               stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL,
+                               stdin=subprocess.DEVNULL)
+                
+                self.append_output("✅ GUI перезапущен успешно")
+                
+                # Даем время новому процессу запуститься
+                time.sleep(2)
+                
+                # Закрываем текущее окно
+                self.root.quit()
+                    
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Ошибка при перезапуске GUI: {e}")
+                self.append_output(f"❌ Ошибка перезапуска: {e}")
     
     def update_utility(self):
         """Обновление утилиты"""
