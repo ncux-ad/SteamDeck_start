@@ -1,0 +1,254 @@
+# Steam Deck Utils - .gitignore
+# Исключения для git репозитория Steam Deck Enhancement Pack
+
+# ===========================================
+# ОТЧЕТЫ И ДОКУМЕНТАЦИЯ
+# ===========================================
+reports/
+*.md.backup
+*.txt.backup
+
+# ===========================================
+# PYTHON ФАЙЛЫ
+# ===========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ===========================================
+# ЛОГИ И ВРЕМЕННЫЕ ФАЙЛЫ
+# ===========================================
+# Логи скриптов
+*.log
+logs/
+log/
+
+# Временные файлы
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Временные директории
+/tmp/
+/temp/
+
+# Бэкапы
+*.bak
+*.backup
+*.old
+
+# ===========================================
+# STEAM DECK СПЕЦИФИЧНЫЕ ФАЙЛЫ
+# ===========================================
+# Steam Deck системные файлы
+steamos-readonly*
+pacman.conf.backup*
+pacman.conf.orig
+
+# Steam данные пользователя
+.steam/
+steamapps/
+steamuserdata/
+
+# Steam Deck кэш и временные файлы
+/var/cache/pacman/
+/var/lib/pacman/
+/tmp/steamdeck_*
+
+# ===========================================
+# ИГРЫ И МЕДИА ФАЙЛЫ
+# ===========================================
+# Игровые директории
+Games/
+SteamRip/
+ROMs/
+Emulators/
+
+# Игровые файлы
+*.exe
+*.msi
+*.app
+*.dmg
+*.pkg
+
+# Медиа файлы
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+
+# ===========================================
+# АРХИВЫ И СЖАТЫЕ ФАЙЛЫ
+# ===========================================
+# Архивы (исключаем большие файлы)
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.gz
+*.bz2
+*.xz
+
+# Образы дисков
+*.iso
+*.img
+*.dmg
+*.vdi
+*.vmdk
+*.qcow2
+
+# ===========================================
+# КОНФИДЕНЦИАЛЬНЫЕ ДАННЫЕ
+# ===========================================
+# Пользовательские данные
+user_data/
+personal/
+private/
+
+# Конфиденциальная информация
+secrets/
+keys/
+passwords/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Конфигурационные файлы с паролями
+config.ini
+settings.conf
+*.env
+.env
+
+# ===========================================
+# РАЗРАБОТКА И ТЕСТИРОВАНИЕ
+# ===========================================
+# IDE файлы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Тестовые файлы
+test_*
+*_test.py
+tests/
+
+# Docker файлы
+.dockerignore
+docker-compose.override.yml
+
+# ===========================================
+# СИСТЕМНЫЕ ФАЙЛЫ
+# ===========================================
+# Linux системные файлы
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Windows системные файлы
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS системные файлы
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# ===========================================
+# СПЕЦИАЛЬНЫЕ ИСКЛЮЧЕНИЯ ДЛЯ ПРОЕКТА
+# ===========================================
+# Временные файлы скриптов
+steamdeck_*.log
+steamdeck_*.tmp
+steamdeck_*.backup
+
+# Бэкапы конфигураций
+*.conf.backup
+*.cfg.backup
+
+# Кэш приложений
+.cache/
+cache/
+flatpak-cache/
+
+# Временные файлы установки
+install_*.log
+setup_*.log
+
+# Файлы состояния
+state_*.log
+status_*.log

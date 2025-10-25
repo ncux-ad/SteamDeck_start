@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  steamdeck-emu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: steamdeck-enhancement-test
+    hostname: steamdeck-emu
+    user: deck
+    working_dir: /home/deck/SteamDeck
+    environment:
+      - STEAM_DECK=1
+      - STEAMOS=1
+      - DISPLAY=:0
+      - HOME=/home/deck
+      - USER=deck
+    volumes:
+      # Монтируем текущую директорию для разработки
+      - .:/home/deck/SteamDeck
+      # Монтируем X11 для GUI (если нужно)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Монтируем тестовые данные
+      - ./test-data:/home/deck/test-data
+    ports:
+      # X11 forwarding
+      - "6000:6000"
+    stdin_open: true
+    tty: true
+    command: ["interactive"]
+    networks:
+      - steamdeck-network
+
+  # Дополнительный сервис для тестирования GUI
+  steamdeck-gui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: steamdeck-gui-test
+    hostname: steamdeck-gui
+    user: deck
+    working_dir: /home/deck/SteamDeck
+    environment:
+      - STEAM_DECK=1
+      - STEAMOS=1
+      - DISPLAY=:0
+      - HOME=/home/deck
+      - USER=deck
+    volumes:
+      - .:/home/deck/SteamDeck
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    ports:
+      - "6001:6000"
+    stdin_open: true
+    tty: true
+    command: ["gui"]
+    networks:
+      - steamdeck-network
+    profiles:
+      - gui
+
+  # Сервис для автоматического тестирования
+  steamdeck-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: steamdeck-auto-test
+    hostname: steamdeck-test
+    user: deck
+    working_dir: /home/deck/SteamDeck
+    environment:
+      - STEAM_DECK=1
+      - STEAMOS=1
+      - HOME=/home/deck
+      - USER=deck
+    volumes:
+      - .:/home/deck/SteamDeck
+      - ./test-results:/home/deck/test-results
+    command: ["test"]
+    networks:
+      - steamdeck-network
+    profiles:
+      - test
+
+networks:
+  steamdeck-network:
+    driver: bridge
+    name: steamdeck-enhancement-network
+
+# Дополнительные конфигурации
+volumes:
+  test-data:
+    driver: local
+  test-results:
+    driver: local
