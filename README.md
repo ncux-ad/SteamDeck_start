@@ -20,6 +20,7 @@
 - **steamdeck_offline_setup.sh** - Настройка для offline-режима
 - **steamdeck_steamrip.sh** - Обработчик SteamRip-pack в RAR-файлах
 - **steamdeck_microsd.sh** - Управление MicroSD картами
+- **steamdeck_update.sh** - Обновление утилиты через GitHub
 - **steamdeck_artwork.sh** - Управление обложками Steam Deck
 - **steamdeck_create_artwork.sh** - Создание обложек
 - **steamdeck_steamgriddb.sh** - Интеграция с Steam Grid DB
@@ -76,7 +77,20 @@ python3 scripts/steamdeck_gui.py
 ./scripts/steamdeck_install_apps.sh quick
 ```
 
-### 3. Оптимизация системы
+### 4. Обновление утилиты
+
+```bash
+# Проверка обновлений
+./scripts/steamdeck_update.sh check
+
+# Обновление до последней версии
+./scripts/steamdeck_update.sh update
+
+# Откат последнего обновления
+./scripts/steamdeck_update.sh rollback
+```
+
+### 5. Оптимизация системы
 
 ```bash
 # Настройка профилей производительности
@@ -280,6 +294,16 @@ SteamDeck/
 ./scripts/steamdeck_microsd.sh fix                  # Исправить проблемы с MicroSD
 ./scripts/steamdeck_microsd.sh safely-remove        # Безопасно извлечь карты
 ./scripts/steamdeck_microsd.sh test                 # Тестирование MicroSD
+```
+
+**Обновление утилиты**
+
+**steamdeck_update.sh** - Обновление через GitHub
+```bash
+./scripts/steamdeck_update.sh check                 # Проверить обновления
+./scripts/steamdeck_update.sh update                # Обновить утилиту
+./scripts/steamdeck_update.sh rollback              # Откат обновления
+./scripts/steamdeck_update.sh status                # Статус версий
 ```
 
 **Управление обложками**

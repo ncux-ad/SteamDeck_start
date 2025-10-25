@@ -138,11 +138,31 @@ class SteamDeckGUI:
                   command=self.reset_sudo_auth,
                   width=20).pack(side='left', padx=5)
         
-        ttk.Button(row2, text="MicroSD", 
+        # Третья строка кнопок - обновления
+        row3 = ttk.Frame(buttons_frame)
+        row3.pack(pady=5)
+        
+        ttk.Button(row3, text="Проверить обновления", 
+                  command=self.check_updates,
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row3, text="Обновить утилиту", 
+                  command=self.update_utility,
+                  width=20).pack(side='left', padx=5)
+        
+        ttk.Button(row3, text="Откат обновления", 
+                  command=self.rollback_update,
+                  width=20).pack(side='left', padx=5)
+        
+        # Четвертая строка кнопок - дополнительные функции
+        row4 = ttk.Frame(buttons_frame)
+        row4.pack(pady=5)
+        
+        ttk.Button(row4, text="MicroSD", 
                   command=self.open_microsd_menu,
                   width=20).pack(side='left', padx=5)
         
-        ttk.Button(row2, text="Восстановить бэкап", 
+        ttk.Button(row4, text="Восстановить бэкап", 
                   command=self.restore_backup,
                   width=20).pack(side='left', padx=5)
         
@@ -926,6 +946,32 @@ class SteamDeckGUI:
         
         if file_path:
             self.run_script("steamdeck_backup.sh", f"restore {file_path}")
+    
+    def check_updates(self):
+        """Проверка обновлений утилиты"""
+        self.run_script("steamdeck_update.sh", "check", "Проверка обновлений...")
+    
+    def update_utility(self):
+        """Обновление утилиты"""
+        result = messagebox.askyesno(
+            "Обновление утилиты",
+            "Обновить Steam Deck Enhancement Pack до последней версии?\n\n"
+            "Будет создана резервная копия текущей версии."
+        )
+        
+        if result:
+            self.run_script("steamdeck_update.sh", "update", "Обновление утилиты...")
+    
+    def rollback_update(self):
+        """Откат последнего обновления"""
+        result = messagebox.askyesno(
+            "Откат обновления",
+            "Откатить последнее обновление утилиты?\n\n"
+            "Восстановится предыдущая версия из резервной копии."
+        )
+        
+        if result:
+            self.run_script("steamdeck_update.sh", "rollback", "Откат обновления...")
             
     def add_to_steam_dialog(self):
         """Диалог добавления приложения в Steam"""

@@ -638,6 +638,9 @@ install_steamdeck_utils() {
     # Ссылка на скрипт MicroSD
     ln -sf "$utils_dir/scripts/steamdeck_microsd.sh" "/home/deck/steamdeck-microsd" 2>/dev/null || true
     
+    # Ссылка на скрипт обновления
+    ln -sf "$utils_dir/scripts/steamdeck_update.sh" "/home/deck/steamdeck-update" 2>/dev/null || true
+    
     # Создаем desktop файл для GUI
     print_message "Создание desktop файла для GUI..."
     cat > "/home/deck/.local/share/applications/steamdeck-enhancement-pack.desktop" << 'EOF'
@@ -677,6 +680,7 @@ echo "  steamdeck-backup    - Резервное копирование"
 echo "  steamdeck-cleanup   - Очистка системы"
 echo "  steamdeck-optimizer - Оптимизация"
 echo "  steamdeck-microsd   - Управление MicroSD"
+echo "  steamdeck-update    - Обновление утилиты"
 echo
 echo "Или запустите GUI: python3 ~/SteamDeck/scripts/steamdeck_gui.py"
 echo
@@ -727,6 +731,9 @@ python3 ~/SteamDeck/scripts/steamdeck_gui.py
 
 # Управление MicroSD
 ~/steamdeck-microsd
+
+# Обновление утилиты
+~/steamdeck-update
 
 # Показать все команды
 ~/steamdeck-utils
