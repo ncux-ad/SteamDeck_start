@@ -80,13 +80,27 @@ print_header() {
 # Функция для проверки интернет-соединения
 check_internet() {
     print_message "Проверка интернет-соединения..."
+    
+    # Проверяем доступность GitHub API
+    if curl -s --head --request GET "https://api.github.com" | grep "200 OK" > /dev/null; then
+        print_success "Интернет-соединение работает"
+        return 0
+    fi
+    
+    # Fallback: проверяем обычный GitHub
+    if curl -s --head --request GET "https://github.com" | grep "200 OK" > /dev/null; then
+        print_success "Интернет-соединение работает"
+        return 0
+    fi
+    
+    # Fallback: проверяем ping
     if ping -c 1 github.com &> /dev/null; then
         print_success "Интернет-соединение работает"
         return 0
-    else
-        print_error "Нет интернет-соединения"
-        return 1
     fi
+    
+    print_error "Нет интернет-соединения"
+    return 1
 }
 
 # Функция для проверки git
@@ -133,13 +147,42 @@ get_current_version() {
     fi
 }
 
-# Функция для получения последней версии с GitHub
+# Функция для получения последней версии с GitHub через API
 get_latest_version() {
+    # Используем GitHub API для получения содержимого файла VERSION
+    local api_url="https://api.github.com/repos/ncux-ad/SteamDeck_start/contents/VERSION"
+    
+    print_debug "Получение версии через GitHub API..." >&2
+    
+    # Получаем содержимое файла VERSION через API
+    local version_response=$(curl -s "$api_url" 2>/dev/null)
+    
+    if [[ $? -eq 0 ]] && [[ -n "$version_response" ]]; then
+        # Извлекаем содержимое файла из JSON ответа
+        local version=$(echo "$version_response" | grep -o '"content":"[^"]*"' | sed 's/"content":"//;s/"//' | base64 -d 2>/dev/null | tr -d '\n')
+        
+        if [[ -n "$version" ]] && [[ "$version" != "null" ]]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+    
+    # Fallback: используем старый метод с клонированием
+    print_debug "API недоступен, используем клонирование..." >&2
+    get_latest_version_fallback
+}
+
+# Fallback функция для получения версии через клонирование
+get_latest_version_fallback() {
     local temp_repo="$TEMP_DIR/version_check"
     
     # Очищаем и создаем временную папку
     rm -rf "$temp_repo"
-    mkdir -p "$temp_repo"
+    if ! mkdir -p "$temp_repo" 2>/dev/null; then
+        print_debug "Не удалось создать временную папку: $temp_repo" >&2
+        echo "unknown"
+        return 1
+    fi
     
     # Клонируем репозиторий во временную папку
     if git clone --depth 1 "$REPO_URL" "$temp_repo" &> /dev/null; then
@@ -179,13 +222,29 @@ create_backup() {
         local backup_name="$(basename "$PROJECT_ROOT")_backup_$(date +%Y%m%d_%H%M%S)"
         local backup_path="$(dirname "$PROJECT_ROOT")/$backup_name"
         print_debug "Создание резервной копии в: $backup_path"
-        cp -r "$PROJECT_ROOT" "$backup_path"
+        
+        if [[ -w "$(dirname "$PROJECT_ROOT")" ]]; then
+            cp -r "$PROJECT_ROOT" "$backup_path"
+        else
+            sudo cp -r "$PROJECT_ROOT" "$backup_path"
+            # Исправляем права доступа для текущего пользователя
+            sudo chown -R $(whoami):$(whoami) "$backup_path"
+        fi
+        
         print_success "Резервная копия создана: $backup_path"
         return 0
     elif [[ -d "$install_dir" ]]; then
         # Если утилита установлена в память Steam Deck
         print_debug "Создание резервной копии установленной утилиты"
-        cp -r "$install_dir" "$backup_dir"
+        
+        if [[ -w "$(dirname "$install_dir")" ]]; then
+            cp -r "$install_dir" "$backup_dir"
+        else
+            sudo cp -r "$install_dir" "$backup_dir"
+            # Исправляем права доступа для текущего пользователя
+            sudo chown -R $(whoami):$(whoami) "$backup_dir"
+        fi
+        
         print_success "Резервная копия создана: $backup_dir"
         return 0
     else
