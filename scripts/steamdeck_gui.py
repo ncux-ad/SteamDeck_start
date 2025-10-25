@@ -120,6 +120,12 @@ class SteamDeckGUI:
                 return "0.1.3"  # Fallback версия
         except:
             return "0.1.3"  # Fallback версия
+    
+    def refresh_version(self):
+        """Обновление версии в GUI"""
+        self.version = self.get_version()
+        # Обновляем заголовок окна
+        self.root.title(f"Steam Deck Enhancement Pack v{self.version}")
         
     def create_widgets(self):
         # Главное меню
@@ -1164,6 +1170,9 @@ class SteamDeckGUI:
                      command=lambda: [dialog.destroy(), self.update_utility()],
                      bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
         elif operation == "update" and result.returncode == 0:
+            tk.Button(button_frame, text="Перезапустить GUI", 
+                     command=lambda: [dialog.destroy(), self.restart_gui()],
+                     bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
             tk.Button(button_frame, text="Проверить обновления", 
                      command=lambda: [dialog.destroy(), self.check_updates()],
                      bg='#2196F3', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
@@ -1182,12 +1191,39 @@ class SteamDeckGUI:
         messagebox.showerror("Ошибка проверки обновлений", 
                            f"Не удалось проверить обновления:\n\n{error_msg}")
     
+    def restart_gui(self):
+        """Перезапуск GUI после обновления"""
+        result = messagebox.askyesno(
+            "Перезапуск GUI",
+            "Перезапустить GUI для применения обновлений?\n\n"
+            "Текущее окно будет закрыто и запущено заново."
+        )
+        
+        if result:
+            # Обновляем версию перед перезапуском
+            self.refresh_version()
+            
+            # Сохраняем путь к обновленному скрипту
+            script_path = self.scripts_dir / "steamdeck_gui.py"
+            
+            # Закрываем текущее окно
+            self.root.destroy()
+            
+            # Запускаем новый экземпляр GUI
+            import subprocess
+            import sys
+            subprocess.Popen([sys.executable, str(script_path)])
+            
+            # Завершаем текущий процесс
+            sys.exit(0)
+    
     def update_utility(self):
         """Обновление утилиты"""
         result = messagebox.askyesno(
             "Обновление утилиты",
             "Обновить Steam Deck Enhancement Pack до последней версии?\n\n"
-            "Будет создана резервная копия текущей версии."
+            "Будет создана резервная копия текущей версии.\n"
+            "GUI будет перезапущен после обновления."
         )
         
         if result:
