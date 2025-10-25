@@ -35,6 +35,7 @@ class SteamDeckGUI:
         
         # Переменные
         self.scripts_dir = Path(__file__).parent
+        self.project_root = Path(__file__).parent.parent
         self.output_text = None
         self.running_process = None
         self.progress_queue = queue.Queue()
@@ -959,11 +960,12 @@ class SteamDeckGUI:
         def check_updates_thread():
             try:
                 # Запускаем проверку обновлений
+                script_path = self.scripts_dir / "steamdeck_update.sh"
                 result = subprocess.run(
-                    ["bash", "scripts/steamdeck_update.sh", "check"],
+                    ["bash", str(script_path), "check"],
                     capture_output=True,
                     text=True,
-                    cwd=os.path.expanduser("~/SteamDeck")
+                    cwd=str(self.project_root)
                 )
                 
                 # Создаем диалог с результатом
@@ -1238,7 +1240,7 @@ class SteamDeckGUI:
                     ["bash", str(script_path), args] if args else ["bash", str(script_path)],
                     capture_output=True,
                     text=True,
-                    cwd=os.path.expanduser("~/SteamDeck")
+                    cwd=str(self.project_root)
                 )
                 
                 # Скрываем прогресс
@@ -1920,9 +1922,9 @@ Steam Deck Enhancement Pack GUI v0.1
 
     def open_artwork_folder(self):
         """Открытие папки с обложками"""
-        artwork_dir = os.path.expanduser("~/SteamDeck/artwork")
-        if os.path.exists(artwork_dir):
-            subprocess.Popen(["dolphin", artwork_dir])
+        artwork_dir = self.project_root / "artwork"
+        if artwork_dir.exists():
+            subprocess.Popen(["dolphin", str(artwork_dir)])
         else:
             messagebox.showinfo("Информация", "Папка с обложками не найдена.\nСначала создайте обложки.")
 
