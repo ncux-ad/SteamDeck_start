@@ -949,7 +949,104 @@ class SteamDeckGUI:
     
     def check_updates(self):
         """Проверка обновлений утилиты"""
-        self.run_script("steamdeck_update.sh", "check", "Проверка обновлений...")
+        import subprocess
+        import threading
+        
+        def check_updates_thread():
+            try:
+                # Запускаем проверку обновлений
+                result = subprocess.run(
+                    ["bash", "scripts/steamdeck_update.sh", "check"],
+                    capture_output=True,
+                    text=True,
+                    cwd=os.path.expanduser("~/SteamDeck")
+                )
+                
+                # Создаем диалог с результатом
+                self.root.after(0, lambda: self.show_update_result(result))
+                
+            except Exception as e:
+                self.root.after(0, lambda: self.show_update_error(str(e)))
+        
+        # Запускаем в отдельном потоке
+        thread = threading.Thread(target=check_updates_thread)
+        thread.daemon = True
+        thread.start()
+        
+        # Показываем индикатор загрузки
+        self.show_progress("Проверка обновлений...")
+    
+    def show_update_result(self, result):
+        """Показать результат проверки обновлений"""
+        self.hide_progress()
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Результат проверки обновлений")
+        dialog.geometry("600x400")
+        dialog.configure(bg='#2b2b2b')
+        
+        # Заголовок
+        title_label = tk.Label(dialog, text="Проверка обновлений Steam Deck Enhancement Pack", 
+                              font=('Arial', 14, 'bold'), fg='white', bg='#2b2b2b')
+        title_label.pack(pady=10)
+        
+        # Область вывода
+        output_frame = tk.Frame(dialog, bg='#2b2b2b')
+        output_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        text_widget = scrolledtext.ScrolledText(output_frame, height=15, width=70, 
+                                               bg='#1e1e1e', fg='white', 
+                                               font=('Consolas', 10))
+        text_widget.pack(fill='both', expand=True)
+        
+        # Выводим результат
+        text_widget.insert(tk.END, "=== ВЫВОД СКРИПТА ===\n")
+        text_widget.insert(tk.END, f"Код возврата: {result.returncode}\n\n")
+        
+        if result.stdout:
+            text_widget.insert(tk.END, "STDOUT:\n")
+            text_widget.insert(tk.END, result.stdout)
+            text_widget.insert(tk.END, "\n")
+        
+        if result.stderr:
+            text_widget.insert(tk.END, "\nSTDERR:\n")
+            text_widget.insert(tk.END, result.stderr)
+        
+        # Анализируем результат
+        text_widget.insert(tk.END, "\n=== АНАЛИЗ РЕЗУЛЬТАТА ===\n")
+        
+        if result.returncode == 0:
+            if "Доступно обновление" in result.stdout:
+                text_widget.insert(tk.END, "✅ Доступно обновление!\n")
+                text_widget.insert(tk.END, "Нажмите 'Обновить утилиту' для установки.\n")
+            elif "последняя версия" in result.stdout:
+                text_widget.insert(tk.END, "✅ У вас установлена последняя версия.\n")
+            else:
+                text_widget.insert(tk.END, "ℹ️ Проверка завершена.\n")
+        else:
+            text_widget.insert(tk.END, "❌ Ошибка при проверке обновлений.\n")
+            text_widget.insert(tk.END, "Проверьте подключение к интернету.\n")
+        
+        text_widget.config(state=tk.DISABLED)
+        
+        # Кнопки
+        button_frame = tk.Frame(dialog, bg='#2b2b2b')
+        button_frame.pack(pady=10)
+        
+        if result.returncode == 0 and "Доступно обновление" in result.stdout:
+            tk.Button(button_frame, text="Обновить сейчас", 
+                     command=lambda: [dialog.destroy(), self.update_utility()],
+                     bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+        
+        tk.Button(button_frame, text="Закрыть", 
+                 command=dialog.destroy,
+                 bg='#666666', fg='white').pack(side='left', padx=5)
+    
+    def show_update_error(self, error_msg):
+        """Показать ошибку проверки обновлений"""
+        self.hide_progress()
+        messagebox.showerror("Ошибка проверки обновлений", 
+                           f"Не удалось проверить обновления:\n\n{error_msg}")
     
     def update_utility(self):
         """Обновление утилиты"""
@@ -960,7 +1057,7 @@ class SteamDeckGUI:
         )
         
         if result:
-            self.run_script("steamdeck_update.sh", "update", "Обновление утилиты...")
+            self.run_script_with_progress("steamdeck_update.sh", "update", "Обновление утилиты...")
     
     def rollback_update(self):
         """Откат последнего обновления"""
@@ -972,6 +1069,60 @@ class SteamDeckGUI:
         
         if result:
             self.run_script("steamdeck_update.sh", "rollback", "Откат обновления...")
+    
+    def run_script_with_progress(self, script_name, args="", message=""):
+        """Запуск скрипта с прогресс-баром и детальным выводом"""
+        import subprocess
+        import threading
+        
+        def run_with_progress():
+            try:
+                script_path = self.scripts_dir / script_name
+                if not script_path.exists():
+                    self.root.after(0, lambda: self.append_output(f"Ошибка: Скрипт {script_name} не найден"))
+                    return
+                
+                # Показываем прогресс
+                self.root.after(0, lambda: self.show_progress(message or f"Выполнение {script_name}..."))
+                
+                # Запускаем скрипт
+                process = subprocess.Popen(
+                    ["bash", str(script_path), args] if args else ["bash", str(script_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+                
+                # Читаем вывод в реальном времени
+                while True:
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    if output:
+                        self.root.after(0, lambda o=output: self.append_output(o.strip()))
+                
+                # Получаем код возврата
+                return_code = process.poll()
+                
+                # Скрываем прогресс
+                self.root.after(0, self.hide_progress)
+                
+                # Показываем результат
+                if return_code == 0:
+                    self.root.after(0, lambda: self.append_output(f"✅ {script_name} выполнен успешно"))
+                else:
+                    self.root.after(0, lambda: self.append_output(f"❌ {script_name} завершился с ошибкой (код: {return_code})"))
+                
+            except Exception as e:
+                self.root.after(0, self.hide_progress)
+                self.root.after(0, lambda: self.append_output(f"Ошибка выполнения {script_name}: {e}"))
+        
+        # Запускаем в отдельном потоке
+        thread = threading.Thread(target=run_with_progress)
+        thread.daemon = True
+        thread.start()
             
     def add_to_steam_dialog(self):
         """Диалог добавления приложения в Steam"""
