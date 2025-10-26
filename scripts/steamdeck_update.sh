@@ -10,22 +10,13 @@ set -euo pipefail
 # Но для некоторых команд нам нужна обработка ошибок вручную
 set +o pipefail  # Отключаем только pipefail для ручной обработки
 
-# Цвета для вывода
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
 # Определяем текущую директорию скрипта (глобально)
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Определяем пользователя и пути установки
-DECK_USER="${STEAMDECK_USER:-deck}"
-DECK_HOME="${STEAMDECK_HOME:-/home/$DECK_USER}"
-INSTALL_DIR="${STEAMDECK_INSTALL_DIR:-$DECK_HOME/utils/SteamDeck}"
+# Загружаем core библиотеку
+source "$PROJECT_ROOT/lib/core.sh"
 
 # Конфигурация
 REPO_URL="https://github.com/ncux-ad/SteamDeck_start.git"
@@ -36,7 +27,7 @@ TEMP_DIR="/tmp/steamdeck_update"
 
 # Функция для получения версии
 get_version() {
-    local version_file="$(dirname "$(dirname "$(readlink -f "$0")")")/VERSION"
+    local version_file="$PROJECT_ROOT/VERSION"
     if [[ -f "$version_file" ]]; then
         cat "$version_file" | tr -d '\n'
     else
@@ -44,40 +35,11 @@ get_version() {
     fi
 }
 
-# Функции для вывода
-print_debug() {
-    echo -e "${YELLOW}[DEBUG]${NC} $1"
-}
-
-print_message() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-print_header() {
-    echo
-    echo -e "${BLUE}================================${NC}"
-    echo -e "${BLUE} $1${NC}"
-    echo -e "${BLUE}================================${NC}"
-    echo
-}
-
 # Загружаем конфигурацию если существует
 CONFIG_FILE="$PROJECT_ROOT/config.env"
 if [[ -f "$CONFIG_FILE" ]]; then
     source "$CONFIG_FILE"
-    print_message "Загружена конфигурация из $CONFIG_FILE"
+    log_info "Загружена конфигурация из $CONFIG_FILE"
 fi
 
 # Функция для проверки интернет-соединения
