@@ -371,8 +371,19 @@ update_utility() {
         print_message "Запуск updater из новой версии..."
         print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
         print_debug "Цель: $PROJECT_ROOT"
+        # Закрываем текущий GUI перед обновлением (если запущен из GUI)
+        if pgrep -f "steamdeck_gui.py" > /dev/null; then
+            print_message "Остановка текущего GUI..."
+            pkill -f "steamdeck_gui.py"
+            sleep 2  # Даем время GUI корректно закрыться
+        fi
+        
         if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$PROJECT_ROOT"; then
             print_success "Обновление применено успешно"
+            
+            # Очищаем временную папку
+            rm -rf "$temp_new_dir"
+            
             # Запускаем GUI из новой версии
             if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
                 print_message "Запуск обновленного GUI..."
@@ -383,14 +394,6 @@ update_utility() {
             print_error "Ошибка при применении обновления"
             rm -rf "$temp_new_dir"
             return 1
-        fi
-        
-        # Очищаем временную папку
-        rm -rf "$temp_new_dir"
-        
-        # Закрываем текущий GUI (если запущен из GUI)
-        if pgrep -f "steamdeck_gui.py" > /dev/null; then
-            pkill -f "steamdeck_gui.py"
         fi
         
         return 0
