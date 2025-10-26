@@ -805,30 +805,25 @@ EOF
         run_sudo chmod +x "$steam_desktop_file"
         run_sudo chown $DECK_USER:$DECK_USER "$steam_desktop_file"
         
-        # Добавляем в Steam (может потребоваться подтверждение пользователя)
-        print_message "Попытка автоматического добавления в Steam..."
+        # Добавляем в Steam
+        print_message "Добавление утилиты в Steam..."
         
-        # Используем правильный протокол для добавления в Steam
-        if su - $DECK_USER -c "steam steam://addnonsteamgame\"$steam_desktop_file\"" 2>/dev/null; then
-            print_success "Утилита добавлена в Steam"
-        else
-            print_warning "Автоматическое добавление не удалось. Попытка альтернативного метода..."
-            
-            # Альтернативный метод: используем steamcmd или прямой вызов
-            if su - $DECK_USER -c "steam -applaunch 0" 2>/dev/null; then
-                print_message "Steam запущен, пожалуйста добавьте приложение вручную"
-            fi
-            
-            print_message ""
-            print_message "Добавьте вручную:"
-            print_message "1. Откройте Steam в режиме Desktop Mode"
-            print_message "2. Steam → Games → Add a Non-Steam Game..."
-            print_message "3. Найдите 'Steam Deck Enhancement Pack' в списке"
-            print_message "4. Отметьте и нажмите 'Add Selected Programs'"
-            print_message ""
-            print_message "Или используйте команду:"
-            print_message "  steam -applaunch 0"
-        fi
+        # Протокол steam://addnonsteamgame НЕ РАБОТАЕТ в современных версиях Steam!
+        # Единственный рабочий способ - редактировать shortcuts.vdf вручную
+        # или использовать BoilR (https://github.com/PhilipK/BoilR)
+        
+        print_warning "Автоматическое добавление в Steam временно отключено"
+        print_message "Протокол steam://addnonsteamgame не поддерживается в Steam 3.0+"
+        print_message ""
+        print_message "Добавьте вручную:"
+        print_message "1. Откройте Steam в режиме Desktop Mode"
+        print_message "2. Steam → Games → Add a Non-Steam Game to My Library"
+        print_message "3. Найдите 'Steam Deck Enhancement Pack' в списке"
+        print_message "4. Отметьте и нажмите 'Add Selected Programs'"
+        print_message ""
+        print_message "Альтернатива - установите BoilR:"
+        print_message "  flatpak install flathub com.github.philipk.boilr"
+        print_message "Затем запустите BoilR и добавьте приложение"
     else
         print_warning "Steam не найден. Добавьте вручную после установки Steam."
     fi
