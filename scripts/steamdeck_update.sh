@@ -316,9 +316,10 @@ update_utility() {
         # Копируем новую версию в установленную директорию
         print_message "Копирование новой версии в установленную директорию..."
         if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
-            print_message "Копирование новой версии без sudo..."
-            if cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"; then
-                print_success "Копирование завершено успешно"
+                    print_message "Копирование новой версии без sudo..."
+        # Исключаем .git и __pycache__ при копировании
+        if rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$INSTALL_DIR/"; then
+            print_success "Копирование завершено успешно"
             else
                 print_error "Ошибка при копировании файлов"
                 return 1
@@ -326,7 +327,8 @@ update_utility() {
         else
             print_message "Требуются права администратора для копирования новой версии..."
             if sudo -n true 2>/dev/null; then
-                if sudo cp -r "$TEMP_DIR/steamdeck_latest" "$INSTALL_DIR"; then
+                # Исключаем .git и __pycache__ при копировании
+                if sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$INSTALL_DIR/"; then
                     print_success "Копирование завершено успешно"
                 else
                     print_error "Ошибка при копировании файлов с sudo"
@@ -370,7 +372,8 @@ update_utility() {
         print_message "Проверка прав доступа для копирования новой версии..."
         if [[ -w "$PROJECT_ROOT" ]]; then
             print_message "Копирование новой версии без sudo..."
-            if cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"; then
+            # Исключаем .git и __pycache__ при копировании
+            if rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$PROJECT_ROOT/"; then
                 print_success "Копирование завершено успешно"
             else
                 print_error "Ошибка при копировании файлов"
@@ -379,7 +382,8 @@ update_utility() {
         else
             print_message "Требуются права администратора для копирования новой версии..."
             if sudo -n true 2>/dev/null; then
-                if sudo cp -r "$TEMP_DIR/steamdeck_latest"/* "$PROJECT_ROOT/"; then
+                # Исключаем .git и __pycache__ при копировании
+                if sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$PROJECT_ROOT/"; then
                     print_success "Копирование завершено успешно"
                 else
                     print_error "Ошибка при копировании файлов с sudo"
