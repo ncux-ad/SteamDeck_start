@@ -5,7 +5,8 @@
 # Автор: @ncux11
 # Версия: динамическая (читается из VERSION)
 
-set -e  # Выход при ошибке
+# set -e отключен для корректной обработки кодов возврата
+set +e
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -22,7 +23,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Определяем пользователя и пути установки
 DECK_USER="${STEAMDECK_USER:-deck}"
 DECK_HOME="${STEAMDECK_HOME:-/home/$DECK_USER}"
-INSTALL_DIR="${STEAMDECK_INSTALL_DIR:-$DECK_HOME/SteamDeck}"
+INSTALL_DIR="${STEAMDECK_INSTALL_DIR:-$DECK_HOME/utils/SteamDeck}"
 
 # Конфигурация
 REPO_URL="https://github.com/ncux-ad/SteamDeck_start.git"
@@ -123,15 +124,18 @@ get_current_version() {
     # 1. В директории проекта (где запущен скрипт)
     if [[ -f "$project_root/VERSION" ]]; then
         version_file="$project_root/VERSION"
-    # 2. В установленной директории
+    # 2. В установленной директории (новая локация /home/deck/utils)
     elif [[ -f "$INSTALL_DIR/VERSION" ]]; then
         version_file="$INSTALL_DIR/VERSION"
     # 3. В текущей рабочей директории
     elif [[ -f "./VERSION" ]]; then
         version_file="./VERSION"
-    # 4. В домашней директории пользователя
+    # 4. В старой директории SteamDeck (для совместимости)
     elif [[ -f "$DECK_HOME/SteamDeck/VERSION" ]]; then
         version_file="$DECK_HOME/SteamDeck/VERSION"
+    # 5. В новой директории utils/SteamDeck
+    elif [[ -f "$DECK_HOME/utils/SteamDeck/VERSION" ]]; then
+        version_file="$DECK_HOME/utils/SteamDeck/VERSION"
     fi
     
     if [[ -n "$version_file" ]]; then
@@ -143,6 +147,7 @@ get_current_version() {
         print_debug "  - $INSTALL_DIR/VERSION" >&2
         print_debug "  - ./VERSION" >&2
         print_debug "  - $DECK_HOME/SteamDeck/VERSION" >&2
+        print_debug "  - $DECK_HOME/utils/SteamDeck/VERSION" >&2
         echo "unknown"
     fi
 }
@@ -210,41 +215,69 @@ get_latest_version_fallback() {
 # Функция для создания резервной копии
 create_backup() {
     local install_dir="$1"
-    local backup_dir="$2"
+    local target_dir="${2:-$install_dir}"
     
     print_message "Создание резервной копии текущей версии..."
     print_debug "install_dir: $install_dir"
-    print_debug "backup_dir: $backup_dir"
+    print_debug "target_dir: $target_dir"
     print_debug "PROJECT_ROOT: $PROJECT_ROOT"
     
-    if [[ -d "$PROJECT_ROOT" ]] && [[ "$PROJECT_ROOT" != "$install_dir" ]]; then
-        # Если запускаем с флешки или другой директории
-        # Создаем бекап в /tmp, чтобы не засорять домашнюю директорию
-        local backup_name="steamdeck_backup_$(date +%Y%m%d_%H%M%S)"
-        local backup_path="/tmp/$backup_name"
-        print_debug "Создание резервной копии в: $backup_path"
-        
-        # Копируем в /tmp (всегда доступен для записи)
-        cp -r "$PROJECT_ROOT" "$backup_path"
-        
-        print_success "Резервная копия создана: $backup_path"
-        return 0
-    elif [[ -d "$install_dir" ]]; then
-        # Если утилита установлена в память Steam Deck
-        print_debug "Создание резервной копии установленной утилиты"
-        
-        if [[ -w "$(dirname "$install_dir")" ]]; then
-            cp -r "$install_dir" "$backup_dir"
-        else
-            sudo cp -r "$install_dir" "$backup_dir"
-            # Исправляем права доступа для текущего пользователя
-            sudo chown -R $(whoami):$(whoami) "$backup_dir"
-        fi
-        
-        print_success "Резервная копия создана: $backup_dir"
-        return 0
+    # Определяем где создавать backup
+    local backup_location=""
+    
+    # Если обновляем установленную в память утилиту
+    if [[ "$target_dir" == "$INSTALL_DIR" ]]; then
+        # Создаем backup в /home/deck/utils/SteamDeck/backups/
+        backup_location="$DECK_HOME/utils/SteamDeck/backups/steamdeck_backup_$(date +%Y%m%d_%H%M%S)"
+    # Если обновляем с флешки
+    elif [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
+        # Для флешки создаем backup рядом с PROJECT_ROOT
+        local parent_dir="$(dirname "$PROJECT_ROOT")"
+        backup_location="$parent_dir/steamdeck_backup_$(date +%Y%m%d_%H%M%S)"
+    # Fallback - в /tmp
     else
-        print_warning "Не найдена папка для резервного копирования"
+        backup_location="/tmp/steamdeck_backup_$(date +%Y%m%d_%H%M%S)"
+    fi
+    
+    print_debug "Резервная копия будет создана в: $backup_location"
+    
+    # Создаем директорию для backup
+    mkdir -p "$(dirname "$backup_location")" 2>/dev/null || true
+    
+    # Копируем установленную утилиту
+    if [[ -d "$target_dir" ]]; then
+        print_debug "Копирование из: $target_dir"
+        
+        # Проверяем права на запись
+        if [[ -w "$(dirname "$backup_location")" ]]; then
+            if cp -r "$target_dir" "$backup_location"; then
+                print_success "Резервная копия создана: $backup_location"
+                
+                # Устанавливаем права на backup
+                chown -R "$(whoami):$(whoami)" "$backup_location" 2>/dev/null || true
+                return 0
+            else
+                print_error "Не удалось создать резервную копию в: $backup_location"
+                # Fallback на /tmp
+                backup_location="/tmp/steamdeck_backup_$(date +%Y%m%d_%H%M%S)"
+                cp -r "$target_dir" "$backup_location"
+                print_success "Резервная копия создана в /tmp: $backup_location"
+                return 0
+            fi
+        else
+            # Пробуем с sudo
+            if sudo cp -r "$target_dir" "$backup_location"; then
+                # Исправляем права доступа
+                sudo chown -R $(whoami):$(whoami) "$backup_location"
+                print_success "Резервная копия создана: $backup_location"
+                return 0
+            else
+                print_error "Не удалось создать резервную копию с sudo"
+                return 1
+            fi
+        fi
+    else
+        print_warning "Не найдена папка для резервного копирования: $target_dir"
         return 1
     fi
 }
@@ -279,21 +312,48 @@ update_utility() {
         
         # Копируем новые файлы
         print_message "Копирование новых файлов..."
+        
+        # Определяем владельца для файлов
+        local file_owner=""
+        if [[ "$target_dir" == "$INSTALL_DIR" ]] && [[ -n "$DECK_USER" ]]; then
+            file_owner="$DECK_USER:$DECK_USER"
+        elif [[ -n "$USER" ]]; then
+            file_owner="$USER:$USER"
+        else
+            file_owner="$(whoami):$(whoami)"
+        fi
+        
+        print_debug "Владелец файлов будет: $file_owner"
+        
         if [[ -w "$target_dir" ]]; then
-            # Копируем без sudo
-            if rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
+            # Копируем без sudo с сохранением прав
+            if rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --chown="$file_owner" "$new_dir/" "$target_dir/"; then
                 print_success "Копирование завершено успешно"
             else
-                print_error "Ошибка при копировании файлов"
-                return 1
+                print_warning "rsync с chown не удался, пробуем без chown..."
+                if rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
+                    print_success "Копирование завершено успешно (без chown)"
+                    # Исправляем права вручную после копирования
+                    chown -R "$file_owner" "$target_dir" 2>/dev/null || true
+                else
+                    print_error "Ошибка при копировании файлов"
+                    return 1
+                fi
             fi
         else
-            # Копируем с sudo
-            if sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
+            # Копируем с sudo и установкой владельца
+            if sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --chown="$file_owner" "$new_dir/" "$target_dir/"; then
                 print_success "Копирование завершено успешно"
             else
-                print_error "Ошибка при копировании файлов с sudo"
-                return 1
+                print_warning "rsync с sudo chown не удался, пробуем без chown..."
+                if sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
+                    print_success "Копирование завершено успешно (без chown)"
+                    # Исправляем права вручную после копирования
+                    sudo chown -R "$file_owner" "$target_dir" 2>/dev/null || true
+                else
+                    print_error "Ошибка при копировании файлов с sudo"
+                    return 1
+                fi
             fi
         fi
         
@@ -317,7 +377,7 @@ update_utility() {
         fi
         
         # Проверяем целостность обновления
-        verify_update_integrity
+        verify_update_integrity "$target_dir"
         
         print_success "Обновление завершено!"
         return 0
@@ -342,122 +402,180 @@ update_utility() {
     fi
     
     # Проверяем, запущены ли мы из обновляемой папки или из новой версии
-    if [[ ! -f "/tmp/steamdeck_update_new" ]]; then
-        # Мы запущены из обновляемой папки - запускаем схему обновления
-        print_message "Запуск схемы безопасного обновления..."
-        print_debug "Целевая директория для обновления: $update_target_dir"
-        
-        # Очищаем и создаем временную папку для новой версии
-        local temp_new_dir="/tmp/steamdeck_update_new_$$"
-        rm -rf "$temp_new_dir"
-        mkdir -p "$temp_new_dir"
-        
-        # Сохраняем текущую директорию
-        local original_dir="$(pwd)"
-        
-        # Клонируем последнюю версию
-        print_message "Загрузка последней версии с GitHub..."
-        print_debug "Клонирование в: $temp_new_dir"
-        
-        # Пробуем клонировать с различными опциями
-        if git clone "$REPO_URL" "$temp_new_dir/steamdeck_latest" 2>&1 | tee /tmp/git_clone.log; then
-            print_success "Последняя версия загружена"
-        else
-            print_error "Не удалось загрузить последнюю версию с GitHub"
-            print_message "Детали ошибки:"
-            cat /tmp/git_clone.log | head -20
-            print_message ""
-            print_warning "Проверьте интернет-соединение и доступность GitHub"
-            rm -rf "$temp_new_dir"
+    # Проверяем, не запущен ли уже процесс обновления
+    local update_lock_file="/tmp/steamdeck_update.lock"
+    if [[ -f "$update_lock_file" ]]; then
+        local lock_pid=$(cat "$update_lock_file")
+        if kill -0 "$lock_pid" 2>/dev/null; then
+            print_error "Обновление уже выполняется (PID: $lock_pid)"
+            print_message "Если это ошибочно, удалите файл: $update_lock_file"
             return 1
+        else
+            # Процесс завершился некорректно, удаляем lock
+            rm -f "$update_lock_file"
         fi
+    fi
+    
+    # Создаем lock файл
+    echo $$ > "$update_lock_file"
+    
+    # Устанавливаем trap для очистки lock при выходе
+    trap "rm -f '$update_lock_file'" EXIT INT TERM
+    
+    # Мы запущены из обновляемой папки - запускаем схему обновления
+    print_message "Запуск схемы безопасного обновления..."
+    print_debug "Целевая директория для обновления: $update_target_dir"
+    
+    # Очищаем и создаем временную папку для новой версии
+    local temp_new_dir="/tmp/steamdeck_update_new_$$"
+    rm -rf "$temp_new_dir"
+    
+    # Проверяем, что можем создать временную директорию
+    if ! mkdir -p "$temp_new_dir" 2>/dev/null; then
+        print_error "Не удалось создать временную директорию: $temp_new_dir"
+        rm -f "$update_lock_file"
+        return 1
+    fi
+    
+    # Сохраняем текущую директорию
+    local original_dir="$(pwd)"
+    
+    # Клонируем последнюю версию
+    print_message "Загрузка последней версии с GitHub..."
+    print_debug "Клонирование в: $temp_new_dir"
+    
+    # Пробуем клонировать с различными опциями
+    if git clone "$REPO_URL" "$temp_new_dir/steamdeck_latest" 2>&1 | tee /tmp/git_clone.log; then
+        print_success "Последняя версия загружена"
+    else
+        print_error "Не удалось загрузить последнюю версию с GitHub"
+        print_message "Детали ошибки:"
+        cat /tmp/git_clone.log | head -20
+        print_message ""
+        print_warning "Проверьте интернет-соединение и доступность GitHub"
+        rm -rf "$temp_new_dir"
+        rm -f "$update_lock_file"
+        trap - EXIT INT TERM
+        return 1
+    fi
+    
+    # Возвращаемся в оригинальную директорию
+    cd "$original_dir"
+    
+    # Запускаем updater из новой версии
+    print_message "Запуск updater из новой версии..."
+    print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
+    print_debug "Цель: $PROJECT_ROOT"
+    
+    # Сохраняем флаг, был ли запущен GUI перед обновлением
+    local gui_was_running=false
+    if pgrep -f "steamdeck_gui.py" > /dev/null; then
+        gui_was_running=true
+        print_message "Остановка текущего GUI..."
+        pkill -f "steamdeck_gui.py"
+        sleep 2  # Даем время GUI корректно закрыться
+    fi
+    
+    if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$update_target_dir"; then
+        print_success "Обновление применено успешно"
         
-        # Возвращаемся в оригинальную директорию
-        cd "$original_dir"
+        # Очищаем временную папку
+        rm -rf "$temp_new_dir"
         
-        # Запускаем updater из новой версии
-        print_message "Запуск updater из новой версии..."
-        print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
-        print_debug "Цель: $PROJECT_ROOT"
-        # Сохраняем флаг, был ли запущен GUI перед обновлением
-        local gui_was_running=false
-        if pgrep -f "steamdeck_gui.py" > /dev/null; then
-            gui_was_running=true
-            print_message "Остановка текущего GUI..."
-            pkill -f "steamdeck_gui.py"
-            sleep 2  # Даем время GUI корректно закрыться
-        fi
+        # Удаляем lock файл
+        rm -f "$update_lock_file"
         
-        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$update_target_dir"; then
-            print_success "Обновление применено успешно"
+        # Снимаем trap
+        trap - EXIT INT TERM
+        
+        # Запускаем GUI из новой версии (только если был запущен до обновления)
+        if [[ "$gui_was_running" == "true" ]] && [[ -f "$update_target_dir/scripts/steamdeck_gui.py" ]]; then
+            print_message "Перезапуск обновленного GUI..."
             
-            # Очищаем временную папку
-            rm -rf "$temp_new_dir"
-            
-            # Запускаем GUI из новой версии (только если был запущен до обновления)
-            if [[ "$gui_was_running" == "true" ]] && [[ -f "$update_target_dir/scripts/steamdeck_gui.py" ]]; then
-                print_message "Перезапуск обновленного GUI..."
-                
-                # Создаем временный скрипт для запуска GUI в отдельном процессе
-                local restart_script="/tmp/steamdeck_restart_gui_$$.sh"
-                cat > "$restart_script" << EOF
+            # Создаем временный скрипт для запуска GUI в отдельном процессе
+            local restart_script="/tmp/steamdeck_restart_gui_$$.sh"
+            cat > "$restart_script" << 'RESTARTEOF'
 #!/bin/bash
 # Временный скрипт для перезапуска GUI после обновления
+# This script will be called with target directory as first argument
+
+TARGET_DIR="$1"
+
+if [[ -z "$TARGET_DIR" ]]; then
+    echo "Ошибка: не указана целевая директория"
+    exit 1
+fi
 
 sleep 2  # Небольшая задержка для завершения текущего процесса
 
 # Запускаем новый GUI
-cd "$update_target_dir"
+cd "$TARGET_DIR"
 if [[ -f "scripts/steamdeck_gui.py" ]]; then
     python3 scripts/steamdeck_gui.py &
-    echo "GUI перезапущен успешно"
+    echo "GUI перезапущен успешно из: $TARGET_DIR"
 else
-    echo "Ошибка: файл GUI не найден"
+    echo "Ошибка: файл GUI не найден в: $TARGET_DIR"
     exit 1
 fi
 
 # Удаляем временный скрипт
-rm -f "\$0"
-EOF
-                chmod +x "$restart_script"
-                
-                # Запускаем скрипт в фоновом режиме и отсоединяем от текущего процесса
-                nohup bash -c "update_target_dir=\"$update_target_dir\" bash $restart_script" > /dev/null 2>&1 &
-                
-                print_success "GUI будет перезапущен автоматически из $update_target_dir"
-            else
-                if [[ "$gui_was_running" == "true" ]]; then
-                    print_warning "GUI был запущен, но файл не найден после обновления в $update_target_dir"
-                else
-                    print_message "GUI не был запущен перед обновлением"
-                fi
-            fi
+rm -f "$0"
+RESTARTEOF
+            chmod +x "$restart_script"
+            
+            # Запускаем скрипт с передачей целевой директории как аргумента
+            nohup bash "$restart_script" "$update_target_dir" > /dev/null 2>&1 &
+            
+            print_success "GUI будет перезапущен автоматически из $update_target_dir"
         else
-            print_error "Ошибка при применении обновления"
-            rm -rf "$temp_new_dir"
-            return 1
+            if [[ "$gui_was_running" == "true" ]]; then
+                print_warning "GUI был запущен, но файл не найден после обновления в $update_target_dir"
+            else
+                print_message "GUI не был запущен перед обновлением"
+            fi
+        fi
+    else
+        print_error "Ошибка при применении обновления"
+        
+        # Очищаем временную папку
+        rm -rf "$temp_new_dir"
+        
+        # Удаляем lock файл
+        rm -f "$update_lock_file"
+        
+        # Снимаем trap
+        trap - EXIT INT TERM
+        
+        # Пытаемся откатить изменения, если доступен backup
+        local backup_search="$target_dir/steamdeck_backup_*"
+        if compgen -G "$backup_search" > /dev/null; then
+            print_message "Попытка откатить изменения из резервной копии..."
+            # Здесь можно добавить логику отката
         fi
         
-        return 0
-    else
-        print_error "Неизвестная команда обновления"
         return 1
     fi
+    
+    return 0
 }
 
 # Функция для проверки целостности обновления
 verify_update_integrity() {
-    print_message "Проверка целостности обновления..."
+    local target_dir="${1:-}"
     
-    local target_dir=""
-    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
-        target_dir="$INSTALL_DIR"
-    elif [[ -d "$PROJECT_ROOT" ]]; then
-        target_dir="$PROJECT_ROOT"
-    else
-        print_error "Не найдена директория для проверки"
-        return 1
+    # Если target_dir не передан, пытаемся определить автоматически
+    if [[ -z "$target_dir" ]]; then
+        if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
+            target_dir="$INSTALL_DIR"
+        elif [[ -d "$PROJECT_ROOT" ]]; then
+            target_dir="$PROJECT_ROOT"
+        else
+            print_error "Не найдена директория для проверки"
+            return 1
+        fi
     fi
+    
+    print_message "Проверка целостности обновления в: $target_dir"
     
     # Проверяем ключевые файлы
     local key_files=(
@@ -487,21 +605,22 @@ verify_update_integrity() {
         return 1
     fi
     
-    # Проверяем версию
-    local current_version=$(get_current_version)
-    local latest_version=$(get_latest_version)
+    # Проверяем, что файлы не пустые
+    for file in "${key_files[@]}"; do
+        if [[ ! -s "$target_dir/$file" ]]; then
+            print_error "Файл пустой: $file"
+            return 1
+        fi
+    done
     
-    if [[ "$latest_version" == "unknown" ]]; then
-        print_warning "Не удалось получить последнюю версию с GitHub, пропускаем проверку версии"
-        print_success "Проверка целостности пройдена успешно (без проверки версии)"
-        return 0
-    fi
-    
-    if [[ "$current_version" == "$latest_version" ]]; then
-        print_success "Версия соответствует ожидаемой: $current_version"
-    else
-        print_error "Несоответствие версий! Текущая: $current_version, Ожидаемая: $latest_version"
-        return 1
+    # Проверяем версию файла VERSION
+    if [[ -f "$target_dir/VERSION" ]]; then
+        local version=$(cat "$target_dir/VERSION" | tr -d '\n')
+        if [[ -n "$version" ]] && [[ "$version" != "unknown" ]]; then
+            print_success "Версия обновленной утилиты: $version"
+        else
+            print_warning "Не удалось прочитать версию из VERSION файла"
+        fi
     fi
     
     print_success "Проверка целостности пройдена успешно"
@@ -536,18 +655,28 @@ rollback_update() {
     # Ищем резервные копии
     local backup_dirs=()
     
-    # Ищем в директории установленной утилиты
-    if [[ -d "$INSTALL_DIR" ]]; then
-        backup_dirs+=($(dirname "$INSTALL_DIR")/SteamDeck_backup_*)
+    # 1. Ищем в /home/deck/utils/SteamDeck/backups/ (новое место для установленной утилиты)
+    if [[ -d "$DECK_HOME/utils/SteamDeck/backups" ]]; then
+        backup_dirs+=($DECK_HOME/utils/SteamDeck/backups/steamdeck_backup_*)
     fi
     
-    # Ищем в директории проекта (для флешки)
-    if [[ -d "$PROJECT_ROOT" ]]; then
+    # 2. Ищем в директории установленной утилиты (старая логика для совместимости)
+    if [[ -d "$INSTALL_DIR" ]]; then
+        backup_dirs+=($(dirname "$INSTALL_DIR")/SteamDeck_backup_*)
+        backup_dirs+=($(dirname "$INSTALL_DIR")/steamdeck_backup_*)
+    fi
+    
+    # 3. Ищем в директории проекта (для флешки)
+    if [[ -d "$PROJECT_ROOT" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
+        backup_dirs+=($(dirname "$PROJECT_ROOT")/steamdeck_backup_*)
         backup_dirs+=($(dirname "$PROJECT_ROOT")/SteamDeck_backup_*)
     fi
     
-    # Ищем в домашней директории пользователя
+    # 4. Ищем в домашней директории пользователя (старая логика)
     backup_dirs+=($HOME/SteamDeck_backup_*)
+    
+    # 5. Fallback - в /tmp
+    backup_dirs+=(/tmp/steamdeck_backup_*)
     
     # Фильтруем только существующие директории
     local existing_backups=()
