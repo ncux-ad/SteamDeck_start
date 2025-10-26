@@ -437,7 +437,8 @@ update_utility() {
         # Применяем обновление к установленной версии
         local target_dir="${2:-$PROJECT_ROOT}"
         # Принимаем новую директорию как третий аргумент (если передан)
-        local new_dir="${3:-$(dirname "$(dirname "$(realpath "$0")")")}"
+        # Используем PROJECT_ROOT как fallback (уже определен глобально)
+        local new_dir="${3:-$PROJECT_ROOT}"
         
         print_message "Применение обновления к: $target_dir"
         print_debug "Источник обновления: $new_dir"
