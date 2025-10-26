@@ -5,22 +5,15 @@
 # Автор: @ncux11
 # Версия: 0.1 (Октябрь 2025)
 
-set -e
+set -euo pipefail
 
-# Цвета для вывода
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Определяем текущую директорию скрипта
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Функции для вывода
-print_message() { echo -e "${BLUE}[INFO]${NC} $1"; }
-print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-print_header() { echo -e "${CYAN}=== $1 ===${NC}"; }
+# Загружаем core библиотеку
+source "$PROJECT_ROOT/lib/core.sh"
 
 # Конфигурация
 GAMES_DIR="$HOME/Games"
