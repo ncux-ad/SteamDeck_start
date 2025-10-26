@@ -434,9 +434,10 @@ create_backup() {
 update_utility() {
     # Проверяем, не вызывается ли функция с аргументом "apply-update"
     if [[ "$1" == "apply-update" ]]; then
-        # Мы запущены из новой версии - применяем обновление к старой
+        # Применяем обновление к установленной версии
         local target_dir="${2:-$PROJECT_ROOT}"
-        local new_dir="$(dirname "$(dirname "$(realpath "$0")")")"
+        # Принимаем новую директорию как третий аргумент (если передан)
+        local new_dir="${3:-$(dirname "$(dirname "$(realpath "$0")")")}"
         
         print_message "Применение обновления к: $target_dir"
         print_debug "Источник обновления: $new_dir"
@@ -671,11 +672,6 @@ update_utility() {
     # Возвращаемся в оригинальную директорию
     cd "$original_dir"
     
-    # Запускаем updater из новой версии
-    print_message "Запуск updater из новой версии..."
-    print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
-    print_debug "Цель: $PROJECT_ROOT"
-    
     # Сохраняем флаг, был ли запущен GUI перед обновлением
     local gui_was_running=false
     if pgrep -f "steamdeck_gui.py" > /dev/null; then
@@ -685,7 +681,12 @@ update_utility() {
         sleep 2  # Даем время GUI корректно закрыться
     fi
     
-    if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$update_target_dir"; then
+    # ПРИМЕНЯЕМ ОБНОВЛЕНИЕ НАПРЯМУЮ (без рекурсивного вызова)
+    print_message "Применение обновления к: $update_target_dir"
+    print_debug "Источник обновления: $temp_new_dir/steamdeck_latest"
+    
+    # Вызываем apply-update напрямую
+    if update_utility "apply-update" "$update_target_dir" "$temp_new_dir/steamdeck_latest"; then
         print_success "Обновление применено успешно"
         
         # Очищаем временную папку
