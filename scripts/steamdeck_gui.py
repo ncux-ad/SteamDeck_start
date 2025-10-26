@@ -74,7 +74,11 @@ class ConfigurationError(SteamDeckError):
 class SteamDeckGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Steam Deck Enhancement Pack")
+        
+        # ⚠️ ПРЕДУПРЕЖДЕНИЕ: ALPHA VERSION
+        self.show_alpha_warning()
+        
+        self.root.title("Steam Deck Enhancement Pack - ALPHA")
         self.root.geometry("800x600")
         self.root.configure(bg='#2b2b2b')
         
@@ -2509,6 +2513,21 @@ Steam Deck Enhancement Pack GUI v{self.version}
             subprocess.Popen(["dolphin", str(artwork_dir)])
         else:
             messagebox.showinfo("Информация", "Папка с обложками не найдена.\nСначала создайте обложки.")
+
+    def show_alpha_warning(self):
+        """Показ предупреждения об ALPHA версии"""
+        from tkinter import messagebox
+        
+        warning = messagebox.showwarning(
+            "⚠️ ALPHA VERSION ⚠️",
+            "Это ALPHA версия утилиты!\n\n"
+            "Известные проблемы:\n"
+            "• Обновление работает нестабильно\n"
+            "• Установка игр не работает\n"
+            "• GUI не функционален\n\n"
+            "Используйте на свой риск!",
+            parent=self.root
+        )
 
 def check_dependencies():
     """Проверка зависимостей для GUI"""
