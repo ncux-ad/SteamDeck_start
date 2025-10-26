@@ -366,8 +366,10 @@ update_utility() {
         print_message "Запуск updater из новой версии..."
         print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
         print_debug "Цель: $PROJECT_ROOT"
-        # Закрываем текущий GUI перед обновлением (если запущен из GUI)
+        # Сохраняем флаг, был ли запущен GUI перед обновлением
+        local gui_was_running=false
         if pgrep -f "steamdeck_gui.py" > /dev/null; then
+            gui_was_running=true
             print_message "Остановка текущего GUI..."
             pkill -f "steamdeck_gui.py"
             sleep 2  # Даем время GUI корректно закрыться
@@ -380,7 +382,7 @@ update_utility() {
             rm -rf "$temp_new_dir"
             
             # Запускаем GUI из новой версии (только если был запущен до обновления)
-            if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]] && pgrep -f "steamdeck_gui.py" > /dev/null; then
+            if [[ "$gui_was_running" == "true" ]] && [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
                 print_message "Перезапуск обновленного GUI..."
                 cd "$PROJECT_ROOT"
                 # Небольшая задержка перед запуском нового GUI
@@ -388,7 +390,11 @@ update_utility() {
                 python3 scripts/steamdeck_gui.py &
                 print_success "GUI перезапущен"
             else
-                print_message "GUI не был запущен перед обновлением, новый GUI не запускается автоматически"
+                if [[ "$gui_was_running" == "true" ]]; then
+                    print_warning "GUI был запущен, но файл не найден после обновления"
+                else
+                    print_message "GUI не был запущен перед обновлением"
+                fi
             fi
         else
             print_error "Ошибка при применении обновления"
