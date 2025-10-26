@@ -344,6 +344,10 @@ update_utility() {
     elif [[ -d "$PROJECT_ROOT" ]]; then
         # Если запускаем с флешки или другой директории
         print_message "Обновление утилиты в текущей директории: $PROJECT_ROOT..."
+        print_debug "PROJECT_ROOT: $PROJECT_ROOT"
+        print_debug "TEMP_DIR: $TEMP_DIR"
+        print_debug "Источник: $TEMP_DIR/steamdeck_latest/"
+        print_debug "Назначение: $PROJECT_ROOT/"
         
         # Сохраняем пользовательские настройки
         local user_config="$PROJECT_ROOT/user_config"
