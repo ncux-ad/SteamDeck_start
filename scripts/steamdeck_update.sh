@@ -384,11 +384,34 @@ update_utility() {
             # Запускаем GUI из новой версии (только если был запущен до обновления)
             if [[ "$gui_was_running" == "true" ]] && [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
                 print_message "Перезапуск обновленного GUI..."
-                cd "$PROJECT_ROOT"
-                # Небольшая задержка перед запуском нового GUI
-                sleep 1
-                python3 scripts/steamdeck_gui.py &
-                print_success "GUI перезапущен"
+                
+                # Создаем временный скрипт для запуска GUI в отдельном процессе
+                local restart_script="/tmp/steamdeck_restart_gui_$$.sh"
+                cat > "$restart_script" << 'EOF'
+#!/bin/bash
+# Временный скрипт для перезапуска GUI после обновления
+
+sleep 2  # Небольшая задержка для завершения текущего процесса
+
+# Запускаем новый GUI
+cd "$PROJECT_ROOT"
+if [[ -f "scripts/steamdeck_gui.py" ]]; then
+    python3 scripts/steamdeck_gui.py &
+    echo "GUI перезапущен успешно"
+else
+    echo "Ошибка: файл GUI не найден"
+    exit 1
+fi
+
+# Удаляем временный скрипт
+rm -f "$0"
+EOF
+                chmod +x "$restart_script"
+                
+                # Запускаем скрипт в фоновом режиме и отсоединяем от текущего процесса
+                nohup bash -c "PROJECT_ROOT=\"$PROJECT_ROOT\" bash $restart_script" > /dev/null 2>&1 &
+                
+                print_success "GUI будет перезапущен автоматически"
             else
                 if [[ "$gui_was_running" == "true" ]]; then
                     print_warning "GUI был запущен, но файл не найден после обновления"
