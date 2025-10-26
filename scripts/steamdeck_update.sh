@@ -294,8 +294,12 @@ update_utility() {
         print_debug "Источник обновления: $new_dir"
         print_debug "Целевая директория: $target_dir"
         
-        # Создаем резервную копию
-        create_backup "$target_dir" ""
+        # Создаем резервную копию (ПРОВЕРЯЕМ УСПЕШНОСТЬ!)
+        print_message "Создание резервной копии..."
+        if ! create_backup "$target_dir" ""; then
+            print_error "Не удалось создать резервную копию, отменяем обновление"
+            return 1
+        fi
         
         # Сохраняем пользовательские настройки
         local user_config="$target_dir/user_config"
@@ -310,8 +314,12 @@ update_utility() {
         print_debug "Целевая директория для обновления: $target_dir"
         print_debug "INSTALL_DIR: $INSTALL_DIR"
         
-        # Копируем новые файлы
-        print_message "Копирование новых файлов..."
+        # ============= ATOMIC UPDATE: Создаем временную директорию =============
+        local temp_update_dir="${target_dir}.tmp_update_$$"
+        print_message "Создание временной директории для обновления: $temp_update_dir"
+        
+        # Копируем новую версию во временную директорию
+        print_message "Копирование новых файлов во временную директорию..."
         
         # Определяем владельца для файлов
         local file_owner=""
@@ -325,59 +333,99 @@ update_utility() {
         
         print_debug "Владелец файлов будет: $file_owner"
         
-        if [[ -w "$target_dir" ]]; then
+        # Копируем во временную директорию
+        if [[ -w "$(dirname "$target_dir")" ]]; then
             # Копируем без sudo с сохранением прав
-            if rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --chown="$file_owner" "$new_dir/" "$target_dir/"; then
+            if rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --chown="$file_owner" "$new_dir/" "$temp_update_dir/"; then
                 print_success "Копирование завершено успешно"
             else
                 print_warning "rsync с chown не удался, пробуем без chown..."
-                if rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
+                if rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$temp_update_dir/"; then
                     print_success "Копирование завершено успешно (без chown)"
                     # Исправляем права вручную после копирования
-                    chown -R "$file_owner" "$target_dir" 2>/dev/null || true
+                    chown -R "$file_owner" "$temp_update_dir" 2>/dev/null || true
                 else
                     print_error "Ошибка при копировании файлов"
+                    rm -rf "$temp_update_dir"
                     return 1
                 fi
             fi
         else
             # Копируем с sudo и установкой владельца
-            if sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --chown="$file_owner" "$new_dir/" "$target_dir/"; then
+            if sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --chown="$file_owner" "$new_dir/" "$temp_update_dir/"; then
                 print_success "Копирование завершено успешно"
             else
                 print_warning "rsync с sudo chown не удался, пробуем без chown..."
-                if sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
+                if sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$temp_update_dir/"; then
                     print_success "Копирование завершено успешно (без chown)"
                     # Исправляем права вручную после копирования
-                    sudo chown -R "$file_owner" "$target_dir" 2>/dev/null || true
+                    sudo chown -R "$file_owner" "$temp_update_dir" 2>/dev/null || true
                 else
                     print_error "Ошибка при копировании файлов с sudo"
+                    rm -rf "$temp_update_dir"
                     return 1
                 fi
             fi
         fi
         
-        # Восстанавливаем пользовательские настройки
+        # Восстанавливаем пользовательские настройки во временную директорию
         if [[ -d "$temp_config" ]]; then
-            cp -r "$temp_config" "$target_dir/user_config"
+            cp -r "$temp_config" "$temp_update_dir/user_config"
             rm -rf "$temp_config"
         fi
         
         # Устанавливаем права доступа
-        if [[ -d "$target_dir" ]]; then
-            if [[ -w "$target_dir" ]]; then
-                chmod -R 755 "$target_dir"
-                chmod +x "$target_dir/scripts"/*.sh 2>/dev/null || true
-                chmod +x "$target_dir"/*.sh 2>/dev/null || true
+        if [[ -d "$temp_update_dir" ]]; then
+            if [[ -w "$temp_update_dir" ]]; then
+                chmod -R 755 "$temp_update_dir"
+                chmod +x "$temp_update_dir/scripts"/*.sh 2>/dev/null || true
+                chmod +x "$temp_update_dir"/*.sh 2>/dev/null || true
             else
-                sudo chmod -R 755 "$target_dir"
-                sudo chmod +x "$target_dir/scripts"/*.sh 2>/dev/null || true
-                sudo chmod +x "$target_dir"/*.sh 2>/dev/null || true
+                sudo chmod -R 755 "$temp_update_dir"
+                sudo chmod +x "$temp_update_dir/scripts"/*.sh 2>/dev/null || true
+                sudo chmod +x "$temp_update_dir"/*.sh 2>/dev/null || true
             fi
         fi
         
-        # Проверяем целостность обновления
-        verify_update_integrity "$target_dir"
+        # Проверяем целостность ОБНОВЛЕНИЯ во временной директории
+        print_message "Проверка целостности обновления..."
+        if ! verify_update_integrity "$temp_update_dir"; then
+            print_error "Обновление некорректно, выполняем откат"
+            rm -rf "$temp_update_dir"
+            rollback_update
+            return 1
+        fi
+        
+        # ============= ATOMIC SWAP: Атомарная подмена =============
+        print_message "Атомарное применение обновления..."
+        
+        # Переименовываем старую версию
+        local old_backup="${target_dir}.old_$$"
+        if [[ -e "$target_dir" ]]; then
+            if mv "$target_dir" "$old_backup"; then
+                print_success "Старая версия сохранена: $old_backup"
+            else
+                print_error "Не удалось переместить старую версию"
+                rm -rf "$temp_update_dir"
+                return 1
+            fi
+        fi
+        
+        # Атомарно перемещаем новую версию на место старой
+        if mv "$temp_update_dir" "$target_dir"; then
+            print_success "Обновление применено атомарно"
+        else
+            print_error "Не удалось переместить новую версию, восстанавливаем старую"
+            mv "$old_backup" "$target_dir" 2>/dev/null
+            rm -rf "$temp_update_dir"
+            rollback_update
+            return 1
+        fi
+        
+        # Удаляем старую версию (только после успешной подмены!)
+        if [[ -d "$old_backup" ]]; then
+            rm -rf "$old_backup"
+        fi
         
         print_success "Обновление завершено!"
         return 0
@@ -403,24 +451,33 @@ update_utility() {
     
     # Проверяем, запущены ли мы из обновляемой папки или из новой версии
     # Проверяем, не запущен ли уже процесс обновления
-    local update_lock_file="/tmp/steamdeck_update.lock"
-    if [[ -f "$update_lock_file" ]]; then
-        local lock_pid=$(cat "$update_lock_file")
-        if kill -0 "$lock_pid" 2>/dev/null; then
+    local update_lock_dir="/tmp/steamdeck_update_lock_$$"
+    
+    # Используем mkdir для атомарного создания lock (best practice!)
+    if ! mkdir "$update_lock_dir" 2>/dev/null; then
+        # Проверяем, действительно ли процесс жив
+        local lock_pid=$(cat "$update_lock_dir/PID" 2>/dev/null)
+        if [[ -n "$lock_pid" ]] && kill -0 "$lock_pid" 2>/dev/null; then
             print_error "Обновление уже выполняется (PID: $lock_pid)"
-            print_message "Если это ошибочно, удалите файл: $update_lock_file"
+            print_message "Если это ошибочно, удалите директорию: $update_lock_dir"
             return 1
         else
-            # Процесс завершился некорректно, удаляем lock
-            rm -f "$update_lock_file"
+            # Процесс завершился некорректно, удаляем старый lock
+            print_warning "Обнаружен старый lock, удаляем его..."
+            rm -rf "$update_lock_dir"
+            # Пробуем создать снова
+            if ! mkdir "$update_lock_dir" 2>/dev/null; then
+                print_error "Не удалось создать lock, возможно другой процесс создал его"
+                return 1
+            fi
         fi
     fi
     
-    # Создаем lock файл
-    echo $$ > "$update_lock_file"
+    # Сохраняем PID в lock-директории
+    echo $$ > "$update_lock_dir/PID"
     
     # Устанавливаем trap для очистки lock при выходе
-    trap "rm -f '$update_lock_file'" EXIT INT TERM
+    trap "rm -rf '$update_lock_dir'" EXIT INT TERM
     
     # Мы запущены из обновляемой папки - запускаем схему обновления
     print_message "Запуск схемы безопасного обновления..."
@@ -433,7 +490,7 @@ update_utility() {
     # Проверяем, что можем создать временную директорию
     if ! mkdir -p "$temp_new_dir" 2>/dev/null; then
         print_error "Не удалось создать временную директорию: $temp_new_dir"
-        rm -f "$update_lock_file"
+        rm -rf "$update_lock_dir"
         return 1
     fi
     
@@ -454,7 +511,7 @@ update_utility() {
         print_message ""
         print_warning "Проверьте интернет-соединение и доступность GitHub"
         rm -rf "$temp_new_dir"
-        rm -f "$update_lock_file"
+        rm -rf "$update_lock_dir"
         trap - EXIT INT TERM
         return 1
     fi
@@ -482,8 +539,8 @@ update_utility() {
         # Очищаем временную папку
         rm -rf "$temp_new_dir"
         
-        # Удаляем lock файл
-        rm -f "$update_lock_file"
+        # Удаляем lock директорию
+        rm -rf "$update_lock_dir"
         
         # Снимаем trap
         trap - EXIT INT TERM
@@ -540,8 +597,8 @@ RESTARTEOF
         # Очищаем временную папку
         rm -rf "$temp_new_dir"
         
-        # Удаляем lock файл
-        rm -f "$update_lock_file"
+        # Удаляем lock директорию
+        rm -rf "$update_lock_dir"
         
         # Снимаем trap
         trap - EXIT INT TERM
