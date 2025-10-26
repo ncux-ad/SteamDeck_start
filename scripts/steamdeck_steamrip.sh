@@ -161,6 +161,92 @@ analyze_steamrip_rar() {
     fi
 }
 
+# Интерактивная функция выбора и распаковки RAR
+interactive_rar_extract() {
+    print_header "ИНТЕРАКТИВНАЯ РАСПАКОВКА RAR ИГРЫ"
+    
+    # Выбор RAR файла
+    print_message "Найдены RAR файлы:"
+    local rar_files=($(find "$DOWNLOADS_DIR" /run/media -maxdepth 3 -name "*.rar" -type f 2>/dev/null))
+    
+    if [[ ${#rar_files[@]} -eq 0 ]]; then
+        print_warning "RAR файлы не найдены"
+        print_message "Ищем в: Downloads, флешки, SD карты..."
+        return 1
+    fi
+    
+    # Показываем список
+    for i in "${!rar_files[@]}"; do
+        echo "  $((i+1))) $(basename "${rar_files[$i]}")"
+        echo "      $(dirname "${rar_files[$i]}")"
+    done
+    
+    read -p "Выберите архив (1-${#rar_files[@]}): " selection
+    if [[ ! "$selection" =~ ^[0-9]+$ ]] || [[ "$selection" -lt 1 ]] || [[ "$selection" -gt ${#rar_files[@]} ]]; then
+        print_error "Неверный выбор"
+        return 1
+    fi
+    
+    local selected_rar="${rar_files[$((selection-1))]}"
+    print_success "Выбран: $(basename "$selected_rar")"
+    
+    # Выбор директории для распаковки
+    echo
+    print_message "Выбор директории для распаковки:"
+    echo "  1) $GAMES_DIR"
+    echo "  2) Указать свой путь"
+    echo "  3) Открыть Dolphin для выбора"
+    
+    read -p "Выбор (1-3): " dir_choice
+    
+    local extract_dir=""
+    case "$dir_choice" in
+        1)
+            extract_dir="$GAMES_DIR"
+            ;;
+        2)
+            read -p "Введите путь: " extract_dir
+            if [[ ! -d "$extract_dir" ]]; then
+                print_error "Директория не существует"
+                return 1
+            fi
+            ;;
+        3)
+            # Открываем Dolphin для выбора директории
+            print_message "Открываем Dolphin для выбора директории..."
+            extract_dir=$(dolphin --select-directory 2>/dev/null || echo "")
+            if [[ -z "$extract_dir" ]]; then
+                print_error "Директория не выбрана"
+                return 1
+            fi
+            ;;
+        *)
+            print_error "Неверный выбор"
+            return 1
+            ;;
+    esac
+    
+    # Добавляем имя игры к пути
+    local game_name=$(basename "$selected_rar" .rar)
+    extract_dir="$extract_dir/$game_name"
+    
+    print_success "Директория для распаковки: $extract_dir"
+    
+    # Запускаем распаковку
+    if extract_steamrip_rar "$selected_rar" "$extract_dir"; then
+        # Открываем Dolphin с распакованными файлами
+        print_message "Открываем Dolphin с распакованными файлами..."
+        dolphin "$extract_dir" &
+        
+        print_success "Распаковка завершена!"
+        print_message "Добавьте игру в Steam вручную через Dolphin"
+        print_message "Steam → Games → Add a Non-Steam Game → Найдите .exe файл"
+    else
+        print_error "Ошибка при распаковке"
+        return 1
+    fi
+}
+
 # Распаковка SteamRip RAR
 extract_steamrip_rar() {
     local rar_file="$1"
@@ -358,11 +444,12 @@ cleanup_steamrip() {
 
 # Показать справку
 show_help() {
-    echo "Steam Deck SteamRip Handler v0.1"
+    echo "Steam Deck SteamRip Handler v0.2"
     echo
     echo "Использование: $0 [ОПЦИЯ] [АРГУМЕНТЫ]"
     echo
     echo "ОПЦИИ:"
+    echo "  interactive                - 🎮 Интерактивная распаковка (РЕКОМЕНДУЕТСЯ)"
     echo "  find                       - Найти RAR файлы SteamRip"
     echo "  analyze <rar_file>         - Анализировать RAR файл"
     echo "  extract <rar_file> [dir]   - Распаковать RAR файл"
@@ -372,17 +459,65 @@ show_help() {
     echo "  help                       - Показать эту справку"
     echo
     echo "ПРИМЕРЫ:"
+    echo "  $0 interactive             # 🎮 Интерактивная распаковка"
     echo "  $0 find                    # Найти RAR файлы"
-    echo "  $0 analyze game.rar        # Анализировать RAR"
     echo "  $0 extract game.rar        # Распаковать RAR"
-    echo "  $0 batch                   # Массовая обработка"
-    echo "  $0 cleanup                 # Очистить SteamRip"
-    echo "  $0 setup                   # Настроить директории"
+}
+
+# Интерактивное меню
+show_interactive_menu() {
+    print_header "STEAMRIP RAR INSTALLER"
+    
+    while true; do
+        echo "Выберите действие:"
+        echo "  1) Интерактивная распаковка RAR игры"
+        echo "  2) Найти RAR файлы"
+        echo "  3) Массовая обработка"
+        echo "  4) Очистить SteamRip директорию"
+        echo "  5) Настроить директории"
+        echo "  0) Выход"
+        echo
+        
+        read -p "Ваш выбор: " choice
+        
+        case "$choice" in
+            1)
+                interactive_rar_extract
+                ;;
+            2)
+                find_steamrip_rar
+                ;;
+            3)
+                batch_process_steamrip
+                ;;
+            4)
+                cleanup_steamrip
+                ;;
+            5)
+                create_steamrip_directory
+                check_dependencies
+                ;;
+            0)
+                print_message "Выход..."
+                exit 0
+                ;;
+            *)
+                print_error "Неверный выбор"
+                ;;
+        esac
+        
+        echo
+        read -p "Нажмите Enter для продолжения..."
+        clear
+    done
 }
 
 # Основная функция
 main() {
-    case "${1:-help}" in
+    case "${1:-interactive}" in
+        "interactive"|"")
+            show_interactive_menu
+            ;;
         "find")
             find_steamrip_rar
             ;;
