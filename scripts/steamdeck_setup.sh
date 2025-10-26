@@ -807,14 +807,28 @@ EOF
         
         # Добавляем в Steam (может потребоваться подтверждение пользователя)
         print_message "Попытка автоматического добавления в Steam..."
-        su - $DECK_USER -c "steam steam://addnonsteamgame\"$steam_desktop_file\"" 2>/dev/null || {
-            print_warning "Автоматическое добавление не удалось"
+        
+        # Используем правильный протокол для добавления в Steam
+        if su - $DECK_USER -c "steam steam://addnonsteamgame\"$steam_desktop_file\"" 2>/dev/null; then
+            print_success "Утилита добавлена в Steam"
+        else
+            print_warning "Автоматическое добавление не удалось. Попытка альтернативного метода..."
+            
+            # Альтернативный метод: используем steamcmd или прямой вызов
+            if su - $DECK_USER -c "steam -applaunch 0" 2>/dev/null; then
+                print_message "Steam запущен, пожалуйста добавьте приложение вручную"
+            fi
+            
+            print_message ""
             print_message "Добавьте вручную:"
             print_message "1. Откройте Steam в режиме Desktop Mode"
             print_message "2. Steam → Games → Add a Non-Steam Game..."
             print_message "3. Найдите 'Steam Deck Enhancement Pack' в списке"
             print_message "4. Отметьте и нажмите 'Add Selected Programs'"
-        }
+            print_message ""
+            print_message "Или используйте команду:"
+            print_message "  steam -applaunch 0"
+        fi
     else
         print_warning "Steam не найден. Добавьте вручную после установки Steam."
     fi
