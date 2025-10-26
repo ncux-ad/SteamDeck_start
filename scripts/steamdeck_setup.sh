@@ -352,8 +352,18 @@ log_setup_state() {
     local details="$2"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
-    echo "$action|$timestamp|$details" >> "$state_file"
-    print_message "Состояние записано: $action"
+    # Создаем файл если не существует и устанавливаем права доступа
+    if [[ ! -f "$state_file" ]]; then
+        touch "$state_file"
+        chmod 666 "$state_file" 2>/dev/null || true
+    fi
+    
+    # Записываем только если можем
+    if echo "$action|$timestamp|$details" >> "$state_file" 2>/dev/null; then
+        print_message "Состояние записано: $action"
+    else
+        print_warning "Не удалось записать состояние в файл (некритично)"
+    fi
 }
 
 # Функция для создания детального бэкапа
