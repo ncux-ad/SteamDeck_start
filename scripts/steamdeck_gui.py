@@ -1185,7 +1185,7 @@ class SteamDeckGUI:
             
             if update_successful:
                 tk.Button(button_frame, text="Перезапустить GUI", 
-                         command=lambda: [dialog.destroy(), self.restart_gui()],
+                         command=lambda: [dialog.destroy(), self.restart_gui_now()],
                          bg='#4CAF50', fg='white', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
             
             tk.Button(button_frame, text="Проверить обновления", 
@@ -1206,8 +1206,54 @@ class SteamDeckGUI:
         messagebox.showerror("Ошибка проверки обновлений", 
                            f"Не удалось проверить обновления:\n\n{error_msg}")
     
+    def restart_gui_now(self):
+        """Немедленный перезапуск GUI без подтверждения"""
+        try:
+            # Сохраняем путь к обновленному скрипту
+            script_path = self.scripts_dir / "steamdeck_gui.py"
+            
+            # Проверяем, что скрипт существует
+            if not script_path.exists():
+                messagebox.showerror("Ошибка", f"Скрипт GUI не найден: {script_path}")
+                return
+            
+            # Создаем временный скрипт для перезапуска
+            restart_script = self.project_root / "restart_gui.sh"
+            restart_script_content = f"""#!/bin/bash
+# Временный скрипт для перезапуска GUI
+cd "{self.project_root}"
+python3 "{script_path}" &
+# Удаляем себя после запуска
+rm -f "{restart_script}"
+"""
+            
+            with open(restart_script, 'w') as f:
+                f.write(restart_script_content)
+            
+            # Делаем скрипт исполняемым
+            os.chmod(restart_script, 0o755)
+            
+            # Запускаем скрипт перезапуска
+            import subprocess
+            subprocess.Popen([str(restart_script)], 
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL,
+                           stdin=subprocess.DEVNULL)
+            
+            self.append_output("✅ GUI перезапускается...")
+            
+            # Даем время новому процессу запуститься
+            time.sleep(2)
+            
+            # Закрываем текущее окно
+            self.root.quit()
+                
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при перезапуске GUI: {e}")
+            self.append_output(f"❌ Ошибка перезапуска: {e}")
+    
     def restart_gui(self):
-        """Перезапуск GUI после обновления"""
+        """Перезапуск GUI после обновления с подтверждением"""
         result = messagebox.askyesno(
             "Перезапуск GUI",
             "Перезапустить GUI для применения обновлений?\n\n"
