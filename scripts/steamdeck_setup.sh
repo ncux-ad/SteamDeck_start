@@ -692,6 +692,14 @@ install_steamdeck_utils() {
     local utils_dir="$INSTALL_DIR"
     local current_dir=$(dirname "$(readlink -f "$0")")
     
+    # Проверяем, установлена ли утилита
+    local is_update=false
+    if [[ -d "$utils_dir" ]] && [[ -f "$utils_dir/scripts/steamdeck_gui.py" ]]; then
+        print_message "Утилита уже установлена в $utils_dir"
+        print_message "Запускаем обновление вместо установки..."
+        is_update=true
+    fi
+    
     # Создаем директорию для утилит
     if [[ ! -d "$utils_dir" ]]; then
         print_message "Создание директории $utils_dir..."
@@ -700,8 +708,16 @@ install_steamdeck_utils() {
     fi
     
     # Копируем все файлы проекта
-    print_message "Копирование файлов утилиты..."
-    run_sudo cp -r "$current_dir"/* "$utils_dir/" 2>/dev/null || {
+    if [[ "$is_update" == "true" ]]; then
+        print_message "Обновление файлов утилиты..."
+        # Используем rsync для умного обновления (без .git и cache)
+        run_sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$current_dir/" "$utils_dir/" 2>/dev/null || {
+            print_warning "Не удалось обновить все файлы через rsync, пытаемся через cp..."
+            run_sudo cp -r "$current_dir"/* "$utils_dir/" 2>/dev/null || true
+        }
+    else
+        print_message "Копирование файлов утилиты..."
+        run_sudo cp -r "$current_dir"/* "$utils_dir/" 2>/dev/null || {
         print_warning "Не удалось скопировать все файлы"
         print_message "Попытка копирования основных компонентов..."
         
@@ -718,7 +734,8 @@ install_steamdeck_utils() {
         run_sudo cp "$current_dir"/*.md "$utils_dir/" 2>/dev/null || true
         run_sudo cp "$current_dir"/*.yml "$utils_dir/" 2>/dev/null || true
         run_sudo cp "$current_dir"/*.sh "$utils_dir/" 2>/dev/null || true
-    }
+        }
+    fi
     
     # Устанавливаем права доступа
     print_message "Установка прав доступа..."
@@ -754,9 +771,8 @@ install_steamdeck_utils() {
     # Создаем desktop файл для GUI
     local desktop_file="$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
     
-    if [[ -f "$desktop_file" ]]; then
+    if [[ -f "$desktop_file" ]] && [[ "$is_update" == "false" ]]; then
         print_message "Desktop файл уже существует, пропускаем создание"
-        print_message "Для обновления используйте опцию обновления утилиты"
     else
         print_message "Создание desktop файла для GUI..."
         run_sudo mkdir -p "$DECK_HOME/.local/share/applications"
@@ -799,7 +815,7 @@ EOF
         # Создаем временный desktop файл для Steam
         local steam_desktop_file="$DECK_HOME/.local/share/applications/steamdeck-enhancement-steam.desktop"
         
-        if [[ -f "$steam_desktop_file" ]]; then
+        if [[ -f "$steam_desktop_file" ]] && [[ "$is_update" == "false" ]]; then
             print_message "Steam desktop файл уже существует, пропускаем создание"
         else
             print_message "Создание Steam desktop файла..."
@@ -941,7 +957,11 @@ EOF
     
     run_sudo chown $DECK_USER:$DECK_USER "$INSTALL_DIR/QUICK_START.md"
     
-    print_success "Steam Deck Enhancement Pack установлен в $utils_dir"
+    if [[ "$is_update" == "true" ]]; then
+        print_success "Steam Deck Enhancement Pack обновлен в $utils_dir"
+    else
+        print_success "Steam Deck Enhancement Pack установлен в $utils_dir"
+    fi
     print_message "Созданы символические ссылки для быстрого доступа"
     print_message "Desktop файл создан для запуска из меню приложений"
     print_message "Быстрый старт: ~/steamdeck-utils"

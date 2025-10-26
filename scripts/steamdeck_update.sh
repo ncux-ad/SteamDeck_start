@@ -219,17 +219,13 @@ create_backup() {
     
     if [[ -d "$PROJECT_ROOT" ]] && [[ "$PROJECT_ROOT" != "$install_dir" ]]; then
         # Если запускаем с флешки или другой директории
-        local backup_name="$(basename "$PROJECT_ROOT")_backup_$(date +%Y%m%d_%H%M%S)"
-        local backup_path="$(dirname "$PROJECT_ROOT")/$backup_name"
+        # Создаем бекап в /tmp, чтобы не засорять домашнюю директорию
+        local backup_name="steamdeck_backup_$(date +%Y%m%d_%H%M%S)"
+        local backup_path="/tmp/$backup_name"
         print_debug "Создание резервной копии в: $backup_path"
         
-        if [[ -w "$(dirname "$PROJECT_ROOT")" ]]; then
-            cp -r "$PROJECT_ROOT" "$backup_path"
-        else
-            sudo cp -r "$PROJECT_ROOT" "$backup_path"
-            # Исправляем права доступа для текущего пользователя
-            sudo chown -R $(whoami):$(whoami) "$backup_path"
-        fi
+        # Копируем в /tmp (всегда доступен для записи)
+        cp -r "$PROJECT_ROOT" "$backup_path"
         
         print_success "Резервная копия создана: $backup_path"
         return 0
