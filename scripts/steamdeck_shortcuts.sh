@@ -236,6 +236,17 @@ add_native_linux_games() {
         "/run/media/mmcblk0p1"
     )
     
+    # Добавляем все возможные /run/media/* для флешек и SD карт
+    local media_dirs=()
+    if [[ -d "/run/media" ]]; then
+        while IFS= read -r -d '' dir; do
+            media_dirs+=("$dir")
+        done < <(find /run/media -maxdepth 1 -type d ! -path /run/media -print0 2>/dev/null)
+    fi
+    
+    # Добавляем в search_dirs
+    search_dirs+=("${media_dirs[@]}")
+    
     local found_games=()
     
     print_message "Поиск .sh игр в стандартных директориях..."
@@ -316,6 +327,17 @@ add_all_native_games() {
         "/run/media/mmcblk0p1/Games"
         "/run/media/mmcblk0p1"
     )
+    
+    # Добавляем все возможные /run/media/* для флешек и SD карт
+    local media_dirs=()
+    if [[ -d "/run/media" ]]; then
+        while IFS= read -r -d '' dir; do
+            media_dirs+=("$dir")
+        done < <(find /run/media -maxdepth 1 -type d ! -path /run/media -print0 2>/dev/null)
+    fi
+    
+    # Добавляем в search_dirs
+    search_dirs+=("${media_dirs[@]}")
     
     local added_count=0
     

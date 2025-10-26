@@ -86,6 +86,17 @@ find_steamrip_rar() {
         "/run/media/mmcblk0p1/Games"
     )
     
+    # Добавляем все возможные /run/media/* для флешек и SD карт
+    local media_dirs=()
+    if [[ -d "/run/media" ]]; then
+        while IFS= read -r -d '' dir; do
+            media_dirs+=("$dir")
+        done < <(find /run/media -maxdepth 1 -type d ! -path /run/media -print0 2>/dev/null)
+    fi
+    
+    # Добавляем в search_dirs
+    search_dirs+=("${media_dirs[@]}")
+    
     local found_files=()
     
     for dir in "${search_dirs[@]}"; do
