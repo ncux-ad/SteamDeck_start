@@ -1901,7 +1901,58 @@ Steam Deck Enhancement Pack GUI v{self.version}
 Используйте на свой страх и риск.
         """
         
-        messagebox.showinfo("О программе", about_text)
+        # Создаем кастомное окно с прокруткой
+        dialog = tk.Toplevel(self.root)
+        dialog.title("О программе")
+        dialog.geometry("700x500")
+        dialog.configure(bg='#2b2b2b')
+        dialog.resizable(True, True)
+        
+        # Центрируем окно
+        dialog.transient(self.root)
+        
+        # Создаем Text виджет с прокруткой
+        text_frame = tk.Frame(dialog, bg='#2b2b2b')
+        text_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        text_widget = tk.Text(text_frame, 
+                             height=20, 
+                             width=80,
+                             bg='#1e1e1e',
+                             fg='white',
+                             font=('Arial', 11),
+                             wrap=tk.WORD,
+                             padx=10,
+                             pady=10)
+        
+        text_widget.insert('1.0', about_text)
+        text_widget.config(state=tk.DISABLED)
+        
+        # Создаем прокрутку
+        scrollbar = tk.Scrollbar(text_frame, command=text_widget.yview)
+        text_widget.config(yscrollcommand=scrollbar.set)
+        
+        # Размещаем виджеты
+        text_widget.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        # Кнопка закрытия
+        button_frame = tk.Frame(dialog, bg='#2b2b2b')
+        button_frame.pack(pady=10)
+        
+        tk.Button(button_frame, 
+                 text="Закрыть", 
+                 command=dialog.destroy,
+                 bg='#4CAF50',
+                 fg='white',
+                 font=('Arial', 10, 'bold'),
+                 width=15).pack()
+        
+        # Центрируем окно на экране
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
         
     def open_documentation(self):
         """Открытие документации"""
