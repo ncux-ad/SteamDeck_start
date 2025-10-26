@@ -147,9 +147,29 @@ install_game() {
     local game_name="$1"
     local script_path="$2"
     
+    # Валидация входных данных
+    if [[ -z "$game_name" ]]; then
+        print_error "Название игры не указано"
+        return 1
+    fi
+    
     if [[ ! -f "$script_path" ]]; then
         print_error "Файл не найден: $script_path"
         return 1
+    fi
+    
+    if [[ ! -r "$script_path" ]]; then
+        print_error "Нет прав на чтение: $script_path"
+        return 1
+    fi
+    
+    # Проверяем, что это действительно bash скрипт
+    if ! head -1 "$script_path" | grep -q "^#!"; then
+        print_warning "Файл не похож на исполняемый скрипт"
+        read -p "Продолжить установку? (y/n): " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            return 1
+        fi
     fi
     
     print_header "УСТАНОВКА ИГРЫ: $game_name"
@@ -215,24 +235,57 @@ EOF
     add_to_steam "$game_name" "$wrapper_script"
 }
 
-# Добавление игры в Steam
+# Добавление игры в Steam (создание .desktop файла)
 add_to_steam() {
     local game_name="$1"
     local script_path="$2"
     
-    print_message "Добавление в Steam: $game_name"
-    
-    # Используем Steam CLI если доступен
-    if command -v steam &> /dev/null; then
-        if steam steam://addnonsteamgame/"$script_path"; then
-            print_success "$game_name добавлена в Steam"
-        else
-            print_warning "Не удалось добавить через Steam CLI"
-            print_message "Добавьте вручную: Steam → Games → Add a Non-Steam Game"
-        fi
-    else
-        print_warning "Steam не найден, добавьте вручную"
+    # Валидация
+    if [[ -z "$game_name" ]] || [[ -z "$script_path" ]]; then
+        print_error "Некорректные параметры для add_to_steam"
+        return 1
     fi
+    
+    if [[ ! -f "$script_path" ]]; then
+        print_error "Скрипт не найден: $script_path"
+        return 1
+    fi
+    
+    print_message "Создание .desktop файла для: $game_name"
+    
+    # Создаем .desktop файл в ~/.local/share/applications
+    local desktop_dir="$HOME/.local/share/applications"
+    local desktop_file="$desktop_dir/${game_name}.desktop"
+    
+    # Валидация имени файла (убираем спецсимволы)
+    game_name=$(echo "$game_name" | tr '[:space:]/' '_' | tr -d '[](){}')
+    desktop_file="$desktop_dir/${game_name}.desktop"
+    
+    # Создаем директорию если не существует
+    if ! mkdir -p "$desktop_dir"; then
+        print_error "Не удалось создать директорию: $desktop_dir"
+        return 1
+    fi
+    
+    # Создаем .desktop файл
+    cat > "$desktop_file" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$game_name
+Exec="$script_path"
+Icon=applications-games
+Categories=Game;
+StartupNotify=false
+EOF
+    
+    chmod +x "$desktop_file"
+    chmod +x "$script_path"
+    
+    print_success "Создан .desktop файл: $desktop_file"
+    print_message "Игра появится в Steam после добавления через Steam UI"
+    print_message "Steam → Games → Add a Non-Steam Game → $game_name"
+    
+    return 0
 }
 
 # Массовое добавление игр
