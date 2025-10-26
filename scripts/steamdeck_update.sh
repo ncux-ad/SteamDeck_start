@@ -257,225 +257,132 @@ create_backup() {
 update_utility() {
     print_message "Обновление Steam Deck Enhancement Pack..."
     
-    # Очищаем и создаем временную папку
-    print_message "Очистка временной папки..."
-    rm -rf "$TEMP_DIR"
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR"
-    
-    # Клонируем последнюю версию
-    print_message "Загрузка последней версии с GitHub..."
-    if git clone "$REPO_URL" steamdeck_latest; then
-        print_success "Последняя версия загружена"
-    else
-        print_error "Не удалось загрузить последнюю версию"
-        # Очищаем временную папку при ошибке
-        rm -rf "$TEMP_DIR"
-        return 1
-    fi
-    
-    # Останавливаем GUI если запущен
-    print_message "Остановка GUI (если запущен)..."
-    pkill -f "steamdeck_gui.py" 2>/dev/null || true
-    
-    # Создаем резервную копию
-    create_backup "$INSTALL_DIR" ""
-    
-    # Копируем новые файлы
-    print_message "Установка обновления..."
-    print_debug "Обновление - PROJECT_ROOT: $PROJECT_ROOT"
-    print_debug "Обновление - INSTALL_DIR: $INSTALL_DIR"
-    
-    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
-        # Если утилита установлена в память Steam Deck
-        print_message "Обновление установленной утилиты в $INSTALL_DIR..."
+    # Проверяем, запущены ли мы из обновляемой папки или из новой версии
+    if [[ ! -f "/tmp/steamdeck_update_new" ]]; then
+        # Мы запущены из обновляемой папки - запускаем схему обновления
+        print_message "Запуск схемы безопасного обновления..."
+        
+        # Очищаем и создаем временную папку для новой версии
+        local temp_new_dir="/tmp/steamdeck_update_new"
+        rm -rf "$temp_new_dir"
+        mkdir -p "$temp_new_dir"
+        cd "$temp_new_dir"
+        
+        # Клонируем последнюю версию
+        print_message "Загрузка последней версии с GitHub..."
+        if git clone "$REPO_URL" steamdeck_latest; then
+            print_success "Последняя версия загружена"
+        else
+            print_error "Не удалось загрузить последнюю версию"
+            rm -rf "$temp_new_dir"
+            return 1
+        fi
+        
+        # Запускаем updater из новой версии
+        print_message "Запуск updater из новой версии..."
+        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" "apply-update" "$PROJECT_ROOT"; then
+            print_success "Обновление применено успешно"
+            # Запускаем GUI из новой версии
+            if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
+                print_message "Запуск обновленного GUI..."
+                cd "$PROJECT_ROOT"
+                python3 scripts/steamdeck_gui.py &
+            fi
+        else
+            print_error "Ошибка при применении обновления"
+            rm -rf "$temp_new_dir"
+            return 1
+        fi
+        
+        # Очищаем временную папку
+        rm -rf "$temp_new_dir"
+        
+        # Закрываем текущий GUI (если запущен из GUI)
+        if pgrep -f "steamdeck_gui.py" > /dev/null; then
+            pkill -f "steamdeck_gui.py"
+        fi
+        
+        return 0
+        
+    elif [[ "$1" == "apply-update" ]]; then
+        # Мы запущены из новой версии - применяем обновление к старой
+        local target_dir="${2:-$PROJECT_ROOT}"
+        local new_dir="$(dirname "$SCRIPT_DIR")"
+        
+        print_message "Применение обновления к: $target_dir"
+        print_debug "Источник обновления: $new_dir"
+        print_debug "Целевая директория: $target_dir"
+        
+        # Останавливаем GUI
+        print_message "Остановка GUI (если запущен)..."
+        pkill -f "steamdeck_gui.py" 2>/dev/null || true
+        sleep 2  # Даем время GUI корректно закрыться
+        
+        # Создаем резервную копию
+        create_backup "$target_dir" ""
         
         # Сохраняем пользовательские настройки
-        local user_config="$INSTALL_DIR/user_config"
+        local user_config="$target_dir/user_config"
+        local temp_config="/tmp/steamdeck_config_$$"
         if [[ -d "$user_config" ]]; then
-            cp -r "$user_config" "$TEMP_DIR/"
+            cp -r "$user_config" "$temp_config"
         fi
         
-        # Удаляем старую версию (с проверкой прав доступа)
-        print_message "Проверка прав доступа для удаления старой версии..."
-        if [[ -w "$INSTALL_DIR" ]]; then
-            print_message "Удаление старой версии без sudo..."
-            rm -rf "$INSTALL_DIR"
-        else
-            print_message "Требуются права администратора для удаления старой версии..."
-            # Проверяем, можем ли мы удалить с sudo
-            if sudo -n true 2>/dev/null; then
-                sudo rm -rf "$INSTALL_DIR"
-            else
-                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
-                print_error "sudo bash scripts/steamdeck_update.sh update"
-                return 1
-            fi
+        # Определяем куда копировать
+        if [[ -d "$INSTALL_DIR" ]] && [[ "$target_dir" != "$INSTALL_DIR" ]]; then
+            # Обновляем установленную утилиту
+            target_dir="$INSTALL_DIR"
         fi
         
-        # Копируем новую версию в установленную директорию
-        print_message "Копирование новой версии в установленную директорию..."
-        if [[ -w "$(dirname "$INSTALL_DIR")" ]]; then
-            print_message "Копирование новой версии без sudo..."
-            # Исключаем .git и __pycache__ при копировании
-            if rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$INSTALL_DIR/"; then
+        # Копируем новые файлы
+        print_message "Копирование новых файлов..."
+        if [[ -w "$target_dir" ]]; then
+            # Копируем без sudo
+            if rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
                 print_success "Копирование завершено успешно"
             else
                 print_error "Ошибка при копировании файлов"
                 return 1
             fi
         else
-            print_message "Требуются права администратора для копирования новой версии..."
-            if sudo -n true 2>/dev/null; then
-                # Исключаем .git и __pycache__ при копировании
-                if sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$INSTALL_DIR/"; then
-                    print_success "Копирование завершено успешно"
-                else
-                    print_error "Ошибка при копировании файлов с sudo"
-                    return 1
-                fi
-            else
-                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
-                print_error "sudo bash scripts/steamdeck_update.sh update"
-                return 1
-            fi
-        fi
-        
-    elif [[ -d "$PROJECT_ROOT" ]]; then
-        # Если запускаем с флешки или другой директории
-        print_message "Обновление утилиты в текущей директории: $PROJECT_ROOT..."
-        print_debug "PROJECT_ROOT: $PROJECT_ROOT"
-        print_debug "TEMP_DIR: $TEMP_DIR"
-        print_debug "Источник: $TEMP_DIR/steamdeck_latest/"
-        print_debug "Назначение: $PROJECT_ROOT/"
-        
-        # Сохраняем пользовательские настройки
-        local user_config="$PROJECT_ROOT/user_config"
-        if [[ -d "$user_config" ]]; then
-            cp -r "$user_config" "$TEMP_DIR/"
-        fi
-        
-        # Удаляем старую версию (с проверкой прав доступа)
-        print_message "Проверка прав доступа для удаления старой версии..."
-        if [[ -w "$PROJECT_ROOT" ]]; then
-            print_message "Удаление старой версии без sudo..."
-            rm -rf "$PROJECT_ROOT"/*
-        else
-            print_message "Требуются права администратора для удаления старой версии..."
-            # Проверяем, можем ли мы удалить с sudo
-            if sudo -n true 2>/dev/null; then
-                sudo rm -rf "$PROJECT_ROOT"/*
-            else
-                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
-                print_error "sudo bash scripts/steamdeck_update.sh update"
-                return 1
-            fi
-        fi
-        
-        # Копируем новую версию (с проверкой прав доступа)
-        print_message "Проверка прав доступа для копирования новой версии..."
-        if [[ -w "$PROJECT_ROOT" ]]; then
-            print_message "Копирование новой версии без sudo..."
-            # Исключаем .git и __pycache__ при копировании
-            if rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$PROJECT_ROOT/"; then
+            # Копируем с sudo
+            if sudo rsync -av --delete --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$new_dir/" "$target_dir/"; then
                 print_success "Копирование завершено успешно"
             else
-                print_error "Ошибка при копировании файлов"
-                return 1
-            fi
-        else
-            print_message "Требуются права администратора для копирования новой версии..."
-            if sudo -n true 2>/dev/null; then
-                # Исключаем .git и __pycache__ при копировании
-                if sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$TEMP_DIR/steamdeck_latest/" "$PROJECT_ROOT/"; then
-                    print_success "Копирование завершено успешно"
-                else
-                    print_error "Ошибка при копировании файлов с sudo"
-                    return 1
-                fi
-            else
-                print_error "Не удалось получить права администратора. Попробуйте запустить с sudo:"
-                print_error "sudo bash scripts/steamdeck_update.sh update"
+                print_error "Ошибка при копировании файлов с sudo"
                 return 1
             fi
         fi
         
+        # Восстанавливаем пользовательские настройки
+        if [[ -d "$temp_config" ]]; then
+            cp -r "$temp_config" "$target_dir/user_config"
+            rm -rf "$temp_config"
+        fi
+        
+        # Устанавливаем права доступа
+        if [[ -d "$target_dir" ]]; then
+            if [[ -w "$target_dir" ]]; then
+                chmod -R 755 "$target_dir"
+                chmod +x "$target_dir/scripts"/*.sh 2>/dev/null || true
+                chmod +x "$target_dir"/*.sh 2>/dev/null || true
+            else
+                sudo chmod -R 755 "$target_dir"
+                sudo chmod +x "$target_dir/scripts"/*.sh 2>/dev/null || true
+                sudo chmod +x "$target_dir"/*.sh 2>/dev/null || true
+            fi
+        fi
+        
+        # Проверяем целостность обновления
+        verify_update_integrity
+        
+        print_success "Обновление завершено!"
+        return 0
+        
     else
-        print_error "Не найдена директория для обновления"
+        print_error "Неизвестная команда обновления"
         return 1
     fi
-    
-    # Восстанавливаем пользовательские настройки
-    if [[ -d "$TEMP_DIR/user_config" ]]; then
-        if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
-            if cp -r "$TEMP_DIR/user_config" "$INSTALL_DIR/"; then
-                print_success "Пользовательские настройки восстановлены"
-            else
-                print_warning "Не удалось восстановить пользовательские настройки"
-            fi
-        elif [[ -d "$PROJECT_ROOT" ]]; then
-            if cp -r "$TEMP_DIR/user_config" "$PROJECT_ROOT/"; then
-                print_success "Пользовательские настройки восстановлены"
-            else
-                print_warning "Не удалось восстановить пользовательские настройки"
-            fi
-        fi
-    fi
-    
-    # Устанавливаем права доступа (только для установленной утилиты)
-    if [[ -d "$INSTALL_DIR" ]]; then
-        # Проверяем, есть ли пользователь deck
-        if id "$DECK_USER" &>/dev/null; then
-            chown -R $DECK_USER:$DECK_USER "$INSTALL_DIR"
-        else
-            print_warning "Пользователь '$DECK_USER' не найден, пропускаем chown"
-        fi
-    fi
-    # Устанавливаем права доступа
-    if [[ -d "$INSTALL_DIR" ]] && [[ "$PROJECT_ROOT" != "$INSTALL_DIR" ]]; then
-        # Для установленной утилиты
-        chmod -R 755 "$INSTALL_DIR"
-        chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
-        chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
-    elif [[ -d "$PROJECT_ROOT" ]]; then
-        # Для утилиты на флешке (с проверкой прав доступа)
-        print_message "Установка прав доступа для обновленных файлов..."
-        if [[ -w "$PROJECT_ROOT" ]]; then
-            chmod -R 755 "$PROJECT_ROOT"
-            chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
-            chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
-        else
-            if sudo -n true 2>/dev/null; then
-                sudo chmod -R 755 "$PROJECT_ROOT"
-                sudo chmod +x "$PROJECT_ROOT/scripts"/*.sh 2>/dev/null || true
-                sudo chmod +x "$PROJECT_ROOT"/*.sh 2>/dev/null || true
-            else
-                print_warning "Не удалось установить права доступа без sudo"
-            fi
-        fi
-    fi
-    
-    # Обновляем символические ссылки (только если пользователь существует)
-    if id "$DECK_USER" &>/dev/null; then
-        print_message "Обновление символических ссылок..."
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_setup.sh" "$DECK_HOME/steamdeck-setup" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_gui.py" "$DECK_HOME/steamdeck-gui" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_backup.sh" "$DECK_HOME/steamdeck-backup" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_cleanup.sh" "$DECK_HOME/steamdeck-cleanup" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_optimizer.sh" "$DECK_HOME/steamdeck-optimizer" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_microsd.sh" "$DECK_HOME/steamdeck-microsd" 2>/dev/null || true
-        ln -sf "$INSTALL_DIR/scripts/steamdeck_update.sh" "$DECK_HOME/steamdeck-update" 2>/dev/null || true
-    else
-        print_warning "Пользователь '$DECK_USER' не найден, пропускаем создание символических ссылок"
-    fi
-    
-    # Очищаем временную папку
-    rm -rf "$TEMP_DIR"
-    
-    # Проверяем целостность обновления
-    verify_update_integrity
-    
-    print_success "Обновление завершено!"
 }
 
 # Функция для проверки целостности обновления
