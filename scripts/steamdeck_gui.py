@@ -1321,10 +1321,6 @@ rm -f "{restart_script}"
         result = messagebox.askyesno(
             "Установка утилиты",
             "Установить Steam Deck Enhancement Pack в основную память?\n\n"
-            "⚠️ Требуется пароль sudo для:\n"
-            "• Создания символических ссылок\n"
-            "• Создания desktop файла\n"
-            "• Обновления базы приложений\n\n"
             "Это создаст:\n"
             "• Символические ссылки в /home/deck/\n"
             "• Ярлык на рабочем столе\n"
@@ -1334,7 +1330,7 @@ rm -f "{restart_script}"
         )
         
         if result:
-            self.run_script_with_sudo("steamdeck_setup.sh", "install-utils")
+            self.run_script_with_progress("steamdeck_setup.sh", "install-utils", "Установка утилиты в основную память...")
     
     def configure_settings(self):
         """Диалог настройки конфигурации"""

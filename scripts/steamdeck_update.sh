@@ -147,47 +147,12 @@ get_current_version() {
     fi
 }
 
-# Функция для получения последней версии релиза с GitHub
+# Функция для получения последней версии с GitHub через API
 get_latest_version() {
-    print_debug "Получение версии релиза через GitHub API..." >&2
-    
-    # Метод 1: Пробуем получить последний релиз
-    local release_response=$(curl -s "https://api.github.com/repos/ncux-ad/SteamDeck_start/releases/latest" 2>/dev/null)
-    
-    if [[ $? -eq 0 ]] && [[ -n "$release_response" ]] && [[ "$release_response" != "[]" ]]; then
-        # Извлекаем tag_name из релиза
-        local version=$(echo "$release_response" | grep -o '"tag_name":"[^"]*"' | sed 's/"tag_name":"//;s/"//' | sed 's/^v//')
-        
-        if [[ -n "$version" ]] && [[ "$version" != "null" ]]; then
-            print_debug "Версия получена из релиза: $version" >&2
-            echo "$version"
-            return 0
-        fi
-    fi
-    
-    # Метод 2: Пробуем получить последний тег
-    print_debug "Релизы не найдены, получаем последний тег..." >&2
-    local tags_response=$(curl -s "https://api.github.com/repos/ncux-ad/SteamDeck_start/tags" 2>/dev/null)
-    
-    if [[ $? -eq 0 ]] && [[ -n "$tags_response" ]] && [[ "$tags_response" != "[]" ]]; then
-        # Извлекаем первый (последний) тег
-        local version=$(echo "$tags_response" | grep '"name"' | head -1 | sed 's/.*"name": *"//;s/".*//' | sed 's/^v//')
-        
-        if [[ -n "$version" ]] && [[ "$version" != "null" ]]; then
-            print_debug "Версия получена из тега: $version" >&2
-            echo "$version"
-            return 0
-        fi
-    fi
-    
-    # Метод 3: Fallback - файл VERSION
-    print_debug "Теги не найдены, используем файл VERSION..." >&2
-    get_latest_version_from_file
-}
-
-# Функция для получения версии из файла VERSION (fallback)
-get_latest_version_from_file() {
+    # Используем GitHub API для получения содержимого файла VERSION
     local api_url="https://api.github.com/repos/ncux-ad/SteamDeck_start/contents/VERSION"
+    
+    print_debug "Получение версии через GitHub API..." >&2
     
     # Получаем содержимое файла VERSION через API
     local version_response=$(curl -s "$api_url" 2>/dev/null)
@@ -197,13 +162,12 @@ get_latest_version_from_file() {
         local version=$(echo "$version_response" | grep -o '"content" *: *"[^"]*"' | sed 's/"content" *: *"//;s/"//' | sed 's/\\n$//' | base64 -d 2>/dev/null | tr -d '\n')
         
         if [[ -n "$version" ]] && [[ "$version" != "null" ]]; then
-            print_debug "Версия получена из файла VERSION: $version" >&2
             echo "$version"
             return 0
         fi
     fi
     
-    # Fallback: используем клонирование
+    # Fallback: используем старый метод с клонированием
     print_debug "API недоступен, используем клонирование..." >&2
     get_latest_version_fallback
 }
