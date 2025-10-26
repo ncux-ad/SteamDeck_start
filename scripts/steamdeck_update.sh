@@ -325,10 +325,27 @@ update_utility() {
     
     print_message "Обновление Steam Deck Enhancement Pack..."
     
+    # Определяем, откуда запущено обновление
+    local update_target_dir=""
+    if [[ -d "$INSTALL_DIR" ]] && [[ -f "$INSTALL_DIR/scripts/steamdeck_gui.py" ]]; then
+        # Утилита установлена в память Steam Deck
+        update_target_dir="$INSTALL_DIR"
+        print_message "Обнаружена установка в память: $update_target_dir"
+        print_message "Обновление будет применено к установленной версии"
+    elif [[ -d "$PROJECT_ROOT" ]]; then
+        # Запущено с флешки или другого места
+        update_target_dir="$PROJECT_ROOT"
+        print_message "Обновление будет применено к: $update_target_dir"
+    else
+        print_error "Не найдена директория для обновления"
+        return 1
+    fi
+    
     # Проверяем, запущены ли мы из обновляемой папки или из новой версии
     if [[ ! -f "/tmp/steamdeck_update_new" ]]; then
         # Мы запущены из обновляемой папки - запускаем схему обновления
         print_message "Запуск схемы безопасного обновления..."
+        print_debug "Целевая директория для обновления: $update_target_dir"
         
         # Очищаем и создаем временную папку для новой версии
         local temp_new_dir="/tmp/steamdeck_update_new_$$"
@@ -371,26 +388,26 @@ update_utility() {
             sleep 2  # Даем время GUI корректно закрыться
         fi
         
-        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$PROJECT_ROOT"; then
+        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$update_target_dir"; then
             print_success "Обновление применено успешно"
             
             # Очищаем временную папку
             rm -rf "$temp_new_dir"
             
             # Запускаем GUI из новой версии (только если был запущен до обновления)
-            if [[ "$gui_was_running" == "true" ]] && [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
+            if [[ "$gui_was_running" == "true" ]] && [[ -f "$update_target_dir/scripts/steamdeck_gui.py" ]]; then
                 print_message "Перезапуск обновленного GUI..."
                 
                 # Создаем временный скрипт для запуска GUI в отдельном процессе
                 local restart_script="/tmp/steamdeck_restart_gui_$$.sh"
-                cat > "$restart_script" << 'EOF'
+                cat > "$restart_script" << EOF
 #!/bin/bash
 # Временный скрипт для перезапуска GUI после обновления
 
 sleep 2  # Небольшая задержка для завершения текущего процесса
 
 # Запускаем новый GUI
-cd "$PROJECT_ROOT"
+cd "$update_target_dir"
 if [[ -f "scripts/steamdeck_gui.py" ]]; then
     python3 scripts/steamdeck_gui.py &
     echo "GUI перезапущен успешно"
@@ -400,17 +417,17 @@ else
 fi
 
 # Удаляем временный скрипт
-rm -f "$0"
+rm -f "\$0"
 EOF
                 chmod +x "$restart_script"
                 
                 # Запускаем скрипт в фоновом режиме и отсоединяем от текущего процесса
-                nohup bash -c "PROJECT_ROOT=\"$PROJECT_ROOT\" bash $restart_script" > /dev/null 2>&1 &
+                nohup bash -c "update_target_dir=\"$update_target_dir\" bash $restart_script" > /dev/null 2>&1 &
                 
-                print_success "GUI будет перезапущен автоматически"
+                print_success "GUI будет перезапущен автоматически из $update_target_dir"
             else
                 if [[ "$gui_was_running" == "true" ]]; then
-                    print_warning "GUI был запущен, но файл не найден после обновления"
+                    print_warning "GUI был запущен, но файл не найден после обновления в $update_target_dir"
                 else
                     print_message "GUI не был запущен перед обновлением"
                 fi
