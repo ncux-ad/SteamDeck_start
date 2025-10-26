@@ -276,10 +276,10 @@ update_utility() {
         fi
         
         # Определяем куда копировать
-        if [[ -d "$INSTALL_DIR" ]] && [[ "$target_dir" != "$INSTALL_DIR" ]]; then
-            # Обновляем установленную утилиту
-            target_dir="$INSTALL_DIR"
-        fi
+        # ВАЖНО: обновляем ТОЛЬКО директорию, откуда запущено обновление!
+        # НЕ переключаемся на INSTALL_DIR, если обновление запущено с флешки
+        print_debug "Целевая директория для обновления: $target_dir"
+        print_debug "INSTALL_DIR: $INSTALL_DIR"
         
         # Копируем новые файлы
         print_message "Копирование новых файлов..."
