@@ -379,11 +379,16 @@ update_utility() {
             # Очищаем временную папку
             rm -rf "$temp_new_dir"
             
-            # Запускаем GUI из новой версии
-            if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
-                print_message "Запуск обновленного GUI..."
+            # Запускаем GUI из новой версии (только если был запущен до обновления)
+            if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]] && pgrep -f "steamdeck_gui.py" > /dev/null; then
+                print_message "Перезапуск обновленного GUI..."
                 cd "$PROJECT_ROOT"
+                # Небольшая задержка перед запуском нового GUI
+                sleep 1
                 python3 scripts/steamdeck_gui.py &
+                print_success "GUI перезапущен"
+            else
+                print_message "GUI не был запущен перед обновлением, новый GUI не запускается автоматически"
             fi
         else
             print_error "Ошибка при применении обновления"
