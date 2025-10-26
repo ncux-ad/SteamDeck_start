@@ -752,9 +752,15 @@ install_steamdeck_utils() {
     run_sudo ln -sf "$utils_dir/scripts/steamdeck_update.sh" "$DECK_HOME/steamdeck-update" 2>/dev/null || true
     
     # Создаем desktop файл для GUI
-    print_message "Создание desktop файла для GUI..."
-    run_sudo mkdir -p "$DECK_HOME/.local/share/applications"
-    run_sudo cat > "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop" << EOF
+    local desktop_file="$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
+    
+    if [[ -f "$desktop_file" ]]; then
+        print_message "Desktop файл уже существует, пропускаем создание"
+        print_message "Для обновления используйте опцию обновления утилиты"
+    else
+        print_message "Создание desktop файла для GUI..."
+        run_sudo mkdir -p "$DECK_HOME/.local/share/applications"
+        run_sudo cat > "$desktop_file" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -767,11 +773,12 @@ Categories=Utility;System;
 StartupNotify=true
 EOF
     
-    run_sudo chmod +x "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
-    run_sudo chown $DECK_USER:$DECK_USER "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
-    
-    # Обновляем desktop базу
-    run_sudo update-desktop-database "$DECK_HOME/.local/share/applications" 2>/dev/null || true
+        run_sudo chmod +x "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
+        run_sudo chown $DECK_USER:$DECK_USER "$DECK_HOME/.local/share/applications/steamdeck-enhancement-pack.desktop"
+        
+        # Обновляем desktop базу
+        run_sudo update-desktop-database "$DECK_HOME/.local/share/applications" 2>/dev/null || true
+    fi
     
     # Создаем wrapper скрипт для запуска из Steam
     print_message "Создание wrapper скрипта для Steam..."
@@ -791,7 +798,12 @@ EOF
     if command -v steam &>/dev/null; then
         # Создаем временный desktop файл для Steam
         local steam_desktop_file="$DECK_HOME/.local/share/applications/steamdeck-enhancement-steam.desktop"
-        run_sudo cat > "$steam_desktop_file" << EOF
+        
+        if [[ -f "$steam_desktop_file" ]]; then
+            print_message "Steam desktop файл уже существует, пропускаем создание"
+        else
+            print_message "Создание Steam desktop файла..."
+            run_sudo cat > "$steam_desktop_file" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -802,8 +814,9 @@ Icon=steam
 Terminal=false
 Categories=Utility;
 EOF
-        run_sudo chmod +x "$steam_desktop_file"
-        run_sudo chown $DECK_USER:$DECK_USER "$steam_desktop_file"
+            run_sudo chmod +x "$steam_desktop_file"
+            run_sudo chown $DECK_USER:$DECK_USER "$steam_desktop_file"
+        fi
         
         # Добавляем в Steam
         print_message "Добавление утилиты в Steam..."
