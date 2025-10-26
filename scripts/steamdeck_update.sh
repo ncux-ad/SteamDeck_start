@@ -255,73 +255,11 @@ create_backup() {
 
 # Функция для обновления
 update_utility() {
-    print_message "Обновление Steam Deck Enhancement Pack..."
-    
-    # Проверяем, запущены ли мы из обновляемой папки или из новой версии
-    if [[ ! -f "/tmp/steamdeck_update_new" ]]; then
-        # Мы запущены из обновляемой папки - запускаем схему обновления
-        print_message "Запуск схемы безопасного обновления..."
-        
-        # Очищаем и создаем временную папку для новой версии
-        local temp_new_dir="/tmp/steamdeck_update_new_$$"
-        rm -rf "$temp_new_dir"
-        mkdir -p "$temp_new_dir"
-        
-        # Сохраняем текущую директорию
-        local original_dir="$(pwd)"
-        
-        # Клонируем последнюю версию
-        print_message "Загрузка последней версии с GitHub..."
-        print_debug "Клонирование в: $temp_new_dir"
-        
-        # Пробуем клонировать с различными опциями
-        if git clone "$REPO_URL" "$temp_new_dir/steamdeck_latest" 2>&1 | tee /tmp/git_clone.log; then
-            print_success "Последняя версия загружена"
-        else
-            print_error "Не удалось загрузить последнюю версию с GitHub"
-            print_message "Детали ошибки:"
-            cat /tmp/git_clone.log | head -20
-            print_message ""
-            print_warning "Проверьте интернет-соединение и доступность GitHub"
-            rm -rf "$temp_new_dir"
-            return 1
-        fi
-        
-        # Возвращаемся в оригинальную директорию
-        cd "$original_dir"
-        
-        # Запускаем updater из новой версии
-        print_message "Запуск updater из новой версии..."
-        print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
-        print_debug "Цель: $PROJECT_ROOT"
-        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$PROJECT_ROOT"; then
-            print_success "Обновление применено успешно"
-            # Запускаем GUI из новой версии
-            if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
-                print_message "Запуск обновленного GUI..."
-                cd "$PROJECT_ROOT"
-                python3 scripts/steamdeck_gui.py &
-            fi
-        else
-            print_error "Ошибка при применении обновления"
-            rm -rf "$temp_new_dir"
-            return 1
-        fi
-        
-        # Очищаем временную папку
-        rm -rf "$temp_new_dir"
-        
-        # Закрываем текущий GUI (если запущен из GUI)
-        if pgrep -f "steamdeck_gui.py" > /dev/null; then
-            pkill -f "steamdeck_gui.py"
-        fi
-        
-        return 0
-        
-    elif [[ "$1" == "apply-update" ]]; then
+    # Проверяем, не вызывается ли функция с аргументом "apply-update"
+    if [[ "$1" == "apply-update" ]]; then
         # Мы запущены из новой версии - применяем обновление к старой
         local target_dir="${2:-$PROJECT_ROOT}"
-        local new_dir="$(dirname "$SCRIPT_DIR")"
+        local new_dir="$(dirname "$(dirname "$(realpath "$0")")")"
         
         print_message "Применение обновления к: $target_dir"
         print_debug "Источник обновления: $new_dir"
@@ -392,7 +330,70 @@ update_utility() {
         
         print_success "Обновление завершено!"
         return 0
+    fi
+    
+    print_message "Обновление Steam Deck Enhancement Pack..."
+    
+    # Проверяем, запущены ли мы из обновляемой папки или из новой версии
+    if [[ ! -f "/tmp/steamdeck_update_new" ]]; then
+        # Мы запущены из обновляемой папки - запускаем схему обновления
+        print_message "Запуск схемы безопасного обновления..."
         
+        # Очищаем и создаем временную папку для новой версии
+        local temp_new_dir="/tmp/steamdeck_update_new_$$"
+        rm -rf "$temp_new_dir"
+        mkdir -p "$temp_new_dir"
+        
+        # Сохраняем текущую директорию
+        local original_dir="$(pwd)"
+        
+        # Клонируем последнюю версию
+        print_message "Загрузка последней версии с GitHub..."
+        print_debug "Клонирование в: $temp_new_dir"
+        
+        # Пробуем клонировать с различными опциями
+        if git clone "$REPO_URL" "$temp_new_dir/steamdeck_latest" 2>&1 | tee /tmp/git_clone.log; then
+            print_success "Последняя версия загружена"
+        else
+            print_error "Не удалось загрузить последнюю версию с GitHub"
+            print_message "Детали ошибки:"
+            cat /tmp/git_clone.log | head -20
+            print_message ""
+            print_warning "Проверьте интернет-соединение и доступность GitHub"
+            rm -rf "$temp_new_dir"
+            return 1
+        fi
+        
+        # Возвращаемся в оригинальную директорию
+        cd "$original_dir"
+        
+        # Запускаем updater из новой версии
+        print_message "Запуск updater из новой версии..."
+        print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
+        print_debug "Цель: $PROJECT_ROOT"
+        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$PROJECT_ROOT"; then
+            print_success "Обновление применено успешно"
+            # Запускаем GUI из новой версии
+            if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
+                print_message "Запуск обновленного GUI..."
+                cd "$PROJECT_ROOT"
+                python3 scripts/steamdeck_gui.py &
+            fi
+        else
+            print_error "Ошибка при применении обновления"
+            rm -rf "$temp_new_dir"
+            return 1
+        fi
+        
+        # Очищаем временную папку
+        rm -rf "$temp_new_dir"
+        
+        # Закрываем текущий GUI (если запущен из GUI)
+        if pgrep -f "steamdeck_gui.py" > /dev/null; then
+            pkill -f "steamdeck_gui.py"
+        fi
+        
+        return 0
     else
         print_error "Неизвестная команда обновления"
         return 1
