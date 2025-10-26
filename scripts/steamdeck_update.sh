@@ -430,6 +430,68 @@ create_backup() {
     fi
 }
 
+# Функция для скачивания с GitHub через .zip (вместо git clone)
+download_from_github() {
+    local temp_dir="$1"
+    local zip_url="https://github.com/ncux-ad/SteamDeck_start/archive/refs/heads/main.zip"
+    local zip_file="/tmp/steamdeck_main_$$.zip"
+    
+    print_message "Скачивание с GitHub..."
+    
+    # Retry механизм
+    local max_retries=3
+    local retry=0
+    
+    while [[ $retry -lt $max_retries ]]; do
+        if curl -L "$zip_url" -o "$zip_file" 2>/dev/null; then
+            print_success "Архив скачан"
+            
+            # Проверяем, что файл не пустой
+            if [[ ! -s "$zip_file" ]]; then
+                print_error "Скачанный файл пуст"
+                rm -f "$zip_file"
+                ((retry++))
+                continue
+            fi
+            
+            # Распаковка
+            print_message "Распаковка архива..."
+            if unzip -q "$zip_file" -d "$temp_dir" 2>/dev/null; then
+                # Перемещаем содержимое в steamdeck_latest
+                if [[ -d "$temp_dir/SteamDeck_start-main" ]]; then
+                    mv "$temp_dir/SteamDeck_start-main" "$temp_dir/steamdeck_latest"
+                    rm -f "$zip_file"
+                    print_success "Архив распакован"
+                    return 0
+                else
+                    print_error "Неверная структура архива"
+                    rm -f "$zip_file"
+                    rm -rf "$temp_dir"
+                    return 1
+                fi
+            else
+                print_warning "Ошибка распаковки"
+                rm -f "$zip_file"
+                ((retry++))
+                continue
+            fi
+        else
+            print_warning "Ошибка скачивания"
+        fi
+        
+        ((retry++))
+        if [[ $retry -lt $max_retries ]]; then
+            print_message "Попытка $retry из $max_retries через 2 секунды..."
+            sleep 2
+        fi
+    done
+    
+    print_error "Не удалось скачать после $max_retries попыток"
+    rm -f "$zip_file"
+    rm -rf "$temp_dir"
+    return 1
+}
+
 # Функция для обновления
 update_utility() {
     # Проверяем, не вызывается ли функция с аргументом "apply-update"
@@ -651,17 +713,12 @@ update_utility() {
     # Сохраняем текущую директорию
     local original_dir="$(pwd)"
     
-    # Клонируем последнюю версию
+    # Скачиваем через .zip (более надежно чем git clone)
     print_message "Загрузка последней версии с GitHub..."
-    print_debug "Клонирование в: $temp_new_dir"
-    
-    # Пробуем клонировать с различными опциями
-    if git clone "$REPO_URL" "$temp_new_dir/steamdeck_latest" 2>&1 | tee /tmp/git_clone.log; then
+    if download_from_github "$temp_new_dir"; then
         print_success "Последняя версия загружена"
     else
         print_error "Не удалось загрузить последнюю версию с GitHub"
-        print_message "Детали ошибки:"
-        cat /tmp/git_clone.log | head -20
         print_message ""
         print_warning "Проверьте интернет-соединение и доступность GitHub"
         rm -rf "$temp_new_dir"
