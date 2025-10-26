@@ -5,8 +5,10 @@
 # Автор: @ncux11
 # Версия: динамическая (читается из VERSION)
 
-# set -e отключен для корректной обработки кодов возврата
-set +e
+# Включаем строгий режим обработки ошибок
+set -euo pipefail
+# Но для некоторых команд нам нужна обработка ошибок вручную
+set +o pipefail  # Отключаем только pipefail для ручной обработки
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -109,6 +111,152 @@ check_git() {
     if ! command -v git &> /dev/null; then
         print_error "Git не установлен. Установите git: sudo pacman -S git"
         exit 1
+    fi
+}
+
+# Функция для проверки наличия необходимых утилит
+check_required_tools() {
+    local missing_tools=()
+    
+    # Проверяем sha256sum (обычно есть в Arch Linux)
+    if ! command -v sha256sum &> /dev/null; then
+        if ! command -v shasum &> /dev/null; then
+            missing_tools+=("sha256sum (или shasum)")
+        fi
+    fi
+    
+    # Проверяем gpg (для проверки подписей)
+    if ! command -v gpg &> /dev/null; then
+        missing_tools+=("gpg")
+    fi
+    
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        print_warning "Отсутствуют некоторые утилиты: ${missing_tools[*]}"
+        print_message "Проверка подписей может быть недоступна"
+    fi
+}
+
+# Функция для скачивания и проверки SHA256 файла
+download_and_verify_checksum() {
+    local target_dir="$1"
+    local version="$2"
+    local checksum_file="$target_dir/CHECKSUMS.sha256"
+    local temp_checksum="/tmp/checksums_$$.sha256"
+    
+    print_message "Скачивание файла checksums..."
+    
+    # Пробуем скачать с GitHub (RAW)
+    local checksum_url="https://raw.githubusercontent.com/ncux-ad/SteamDeck_start/main/CHECKSUMS.sha256"
+    
+    if curl -sfL "$checksum_url" -o "$temp_checksum" 2>/dev/null; then
+        # Копируем в целевую директорию
+        cp "$temp_checksum" "$checksum_file"
+        rm -f "$temp_checksum"
+        print_success "Checksum файл скачан: $checksum_file"
+        return 0
+    else
+        print_warning "Не удалось скачать checksum файл с GitHub"
+        print_message "Обновление продолжится без проверки checksums"
+        rm -f "$temp_checksum"
+        return 1
+    fi
+}
+
+# Функция для проверки checksum файла
+verify_file_checksum() {
+    local file_path="$1"
+    local checksum_file="$2"
+    
+    # Проверяем наличие checksum файла
+    if [[ ! -f "$checksum_file" ]]; then
+        print_warning "Checksum файл не найден, пропускаем проверку"
+        return 0  # Не критично, продолжаем
+    fi
+    
+    print_debug "Проверка checksum для: $file_path"
+    
+    # Получаем базовое имя файла
+    local basename_file=$(basename "$file_path")
+    local expected_checksum=""
+    
+    # Ищем checksum в файле
+    if command -v sha256sum &> /dev/null; then
+        expected_checksum=$(grep -E "  ${basename_file}$" "$checksum_file" | awk '{print $1}')
+    elif command -v shasum &> /dev/null; then
+        expected_checksum=$(grep -E "  ${basename_file}$" "$checksum_file" | awk '{print $1}')
+    fi
+    
+    if [[ -z "$expected_checksum" ]]; then
+        print_warning "Checksum для $basename_file не найден в файле"
+        return 0  # Не критично, продолжаем
+    fi
+    
+    # Вычисляем реальный checksum
+    local actual_checksum=""
+    if command -v sha256sum &> /dev/null; then
+        actual_checksum=$(sha256sum "$file_path" 2>/dev/null | awk '{print $1}')
+    elif command -v shasum &> /dev/null; then
+        actual_checksum=$(shasum -a 256 "$file_path" 2>/dev/null | awk '{print $1}')
+    fi
+    
+    if [[ -z "$actual_checksum" ]]; then
+        print_error "Не удалось вычислить checksum для $file_path"
+        return 1
+    fi
+    
+    # Сравниваем
+    if [[ "$actual_checksum" == "$expected_checksum" ]]; then
+        print_success "Checksum совпадает: $basename_file"
+        return 0
+    else
+        print_error "Checksum НЕ совпадает для $basename_file"
+        print_error "Ожидалось: $expected_checksum"
+        print_error "Получено: $actual_checksum"
+        return 1
+    fi
+}
+
+# Функция для проверки GPG подписи (если доступна)
+verify_gpg_signature() {
+    local signature_file="$1"
+    local file_to_verify="$2"
+    local gpg_key_url="$3"
+    
+    # Проверяем наличие gpg
+    if ! command -v gpg &> /dev/null; then
+        print_warning "GPG не установлен, пропускаем проверку подписи"
+        return 0  # Не критично
+    fi
+    
+    print_message "Проверка GPG подписи..."
+    
+    # Скачиваем публичный ключ (если еще не импортирован)
+    local key_imported=false
+    if gpg --list-keys "ncux-ad@users.noreply.github.com" &>/dev/null; then
+        key_imported=true
+    fi
+    
+    if [[ "$key_imported" == "false" ]] && [[ -n "$gpg_key_url" ]]; then
+        print_message "Импорт публичного ключа..."
+        if curl -sL "$gpg_key_url" | gpg --import &>/dev/null; then
+            key_imported=true
+        else
+            print_warning "Не удалось импортировать GPG ключ"
+        fi
+    fi
+    
+    if [[ "$key_imported" == "false" ]]; then
+        print_warning "GPG ключ не найден, пропускаем проверку подписи"
+        return 0  # Не критично
+    fi
+    
+    # Проверяем подпись
+    if gpg --verify "$signature_file" "$file_to_verify" &>/dev/null; then
+        print_success "GPG подпись проверена успешно"
+        return 0
+    else
+        print_error "GPG подпись НЕВЕРНАЯ"
+        return 1
     fi
 }
 
@@ -386,6 +534,10 @@ update_utility() {
                 sudo chmod +x "$temp_update_dir"/*.sh 2>/dev/null || true
             fi
         fi
+        
+        # Скачиваем checksum файл (если доступен)
+        local version=$(cat "$temp_update_dir/VERSION" 2>/dev/null | tr -d '\n')
+        download_and_verify_checksum "$temp_update_dir" "$version"
         
         # Проверяем целостность ОБНОВЛЕНИЯ во временной директории
         print_message "Проверка целостности обновления..."
@@ -680,6 +832,26 @@ verify_update_integrity() {
         fi
     fi
     
+    # Проверяем checksums (если доступны)
+    local checksum_file="$target_dir/CHECKSUMS.sha256"
+    if [[ -f "$checksum_file" ]]; then
+        print_message "Проверка checksums ключевых файлов..."
+        local checksum_failed=false
+        
+        for file in "${key_files[@]}"; do
+            if ! verify_file_checksum "$target_dir/$file" "$checksum_file"; then
+                checksum_failed=true
+            fi
+        done
+        
+        if [[ "$checksum_failed" == "true" ]]; then
+            print_error "Некоторые файлы не прошли проверку checksum"
+            return 1
+        fi
+    else
+        print_warning "Checksum файл не найден, пропускаем проверку checksums"
+    fi
+    
     print_success "Проверка целостности пройдена успешно"
     return 0
 }
@@ -860,6 +1032,7 @@ main() {
             print_header "ОБНОВЛЕНИЕ STEAM DECK ENHANCEMENT PACK"
             check_internet || exit 1
             check_git || exit 1
+            check_required_tools || true  # Не критично, продолжаем
             update_utility
             ;;
         "apply-update")
