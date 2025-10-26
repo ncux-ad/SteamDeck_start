@@ -73,14 +73,22 @@ class ConfigurationError(SteamDeckError):
 
 class SteamDeckGUI:
     def __init__(self, root):
+        print("DEBUG: SteamDeckGUI.__init__ start")
         self.root = root
+        print("DEBUG: Root created")
         self.root.title("Steam Deck Enhancement Pack")
+        print("DEBUG: Title set")
         self.root.geometry("800x600")
+        print("DEBUG: Geometry set")
         self.root.configure(bg='#2b2b2b')
+        print("DEBUG: Background configured")
         
         # Стили
+        print("DEBUG: Creating style...")
         self.style = ttk.Style()
+        print("DEBUG: Style object created")
         self.style.theme_use('clam')
+        print("DEBUG: Theme set")
         self.style.configure('TNotebook', background='#2b2b2b')
         self.style.configure('TNotebook.Tab', background='#3c3c3c', foreground='white')
         self.style.configure('TFrame', background='#2b2b2b')
@@ -2680,14 +2688,21 @@ def show_first_launch_dialog():
 
 
 def main():
+    print("DEBUG: main() started")
+    
     # Проверяем зависимости
+    print("DEBUG: Checking dependencies...")
     if not check_dependencies():
         print("❌ Зависимости не установлены")
         sys.exit(1)
+    print("DEBUG: Dependencies OK")
     
     # Проверяем, что мы в правильной директории проекта
+    print("DEBUG: Checking project directory...")
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
+    print(f"DEBUG: script_dir={script_dir}")
+    print(f"DEBUG: project_root={project_root}")
     
     # Проверяем наличие ключевых файлов проекта
     if not (project_root / "VERSION").exists() or not (project_root / "README.md").exists():
@@ -2695,6 +2710,7 @@ def main():
         print(f"Текущая директория скрипта: {script_dir}")
         print(f"Ожидаемая корневая директория: {project_root}")
         sys.exit(1)
+    print("DEBUG: Project files OK")
     
     # Проверяем установку при первом запуске (только для информации)
     # Убираем проверку, чтобы GUI всегда запускался
@@ -2704,10 +2720,16 @@ def main():
     #     print("   Вы можете установить её через меню 'Система' → 'Установить утилиту'")
     
     # Создаем главное окно
+    print("DEBUG: Creating root window...")
     try:
         root = tk.Tk()
+        print("DEBUG: Root window created")
+        print("DEBUG: Creating GUI app...")
         app = SteamDeckGUI(root)
+        print("DEBUG: GUI app created")
+        print("DEBUG: Starting mainloop...")
         root.mainloop()
+        print("DEBUG: Mainloop exited")
         
     except Exception as e:
         print(f"❌ Ошибка создания GUI: {e}")
