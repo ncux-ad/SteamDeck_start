@@ -193,9 +193,7 @@ settings.conf
 *~
 
 # Тестовые файлы
-test_*
-*_test.py
-tests/
+# tests/ # Раскомментировано для включения тестов в репозиторий
 
 # Docker файлы
 .dockerignore
