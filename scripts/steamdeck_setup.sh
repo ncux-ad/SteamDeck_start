@@ -763,6 +763,52 @@ EOF
     # Обновляем desktop базу
     run_sudo update-desktop-database "$DECK_HOME/.local/share/applications" 2>/dev/null || true
     
+    # Создаем wrapper скрипт для запуска из Steam
+    print_message "Создание wrapper скрипта для Steam..."
+    run_sudo cat > "$utils_dir/steamdeck_gui_steam.sh" << 'EOF'
+#!/bin/bash
+# Wrapper скрипт для запуска Steam Deck Enhancement Pack GUI из Steam
+# Автор: @ncux11
+
+cd "$HOME/SteamDeck"
+python3 scripts/steamdeck_gui.py
+EOF
+    run_sudo chmod +x "$utils_dir/steamdeck_gui_steam.sh"
+    run_sudo chown $DECK_USER:$DECK_USER "$utils_dir/steamdeck_gui_steam.sh"
+    
+    # Пытаемся добавить в Steam
+    print_message "Добавление утилиты в Steam..."
+    if command -v steam &>/dev/null; then
+        # Создаем временный desktop файл для Steam
+        local steam_desktop_file="$DECK_HOME/.local/share/applications/steamdeck-enhancement-steam.desktop"
+        run_sudo cat > "$steam_desktop_file" << EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Steam Deck Enhancement Pack
+Comment=Утилиты для управления Steam Deck
+Exec=$utils_dir/steamdeck_gui_steam.sh
+Icon=steam
+Terminal=false
+Categories=Utility;
+EOF
+        run_sudo chmod +x "$steam_desktop_file"
+        run_sudo chown $DECK_USER:$DECK_USER "$steam_desktop_file"
+        
+        # Добавляем в Steam (может потребоваться подтверждение пользователя)
+        print_message "Попытка автоматического добавления в Steam..."
+        su - $DECK_USER -c "steam steam://addnonsteamgame\"$steam_desktop_file\"" 2>/dev/null || {
+            print_warning "Автоматическое добавление не удалось"
+            print_message "Добавьте вручную:"
+            print_message "1. Откройте Steam в режиме Desktop Mode"
+            print_message "2. Steam → Games → Add a Non-Steam Game..."
+            print_message "3. Найдите 'Steam Deck Enhancement Pack' в списке"
+            print_message "4. Отметьте и нажмите 'Add Selected Programs'"
+        }
+    else
+        print_warning "Steam не найден. Добавьте вручную после установки Steam."
+    fi
+    
     # Создаем скрипт быстрого запуска
     print_message "Создание скрипта быстрого запуска..."
     run_sudo cat > "$DECK_HOME/steamdeck-utils" << 'EOF'
