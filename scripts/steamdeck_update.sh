@@ -263,20 +263,32 @@ update_utility() {
         print_message "Запуск схемы безопасного обновления..."
         
         # Очищаем и создаем временную папку для новой версии
-        local temp_new_dir="/tmp/steamdeck_update_new"
+        local temp_new_dir="/tmp/steamdeck_update_new_$$"
         rm -rf "$temp_new_dir"
         mkdir -p "$temp_new_dir"
-        cd "$temp_new_dir"
+        
+        # Сохраняем текущую директорию
+        local original_dir="$(pwd)"
         
         # Клонируем последнюю версию
         print_message "Загрузка последней версии с GitHub..."
-        if git clone "$REPO_URL" steamdeck_latest; then
+        print_debug "Клонирование в: $temp_new_dir"
+        
+        # Пробуем клонировать с различными опциями
+        if git clone "$REPO_URL" "$temp_new_dir/steamdeck_latest" 2>&1 | tee /tmp/git_clone.log; then
             print_success "Последняя версия загружена"
         else
-            print_error "Не удалось загрузить последнюю версию"
+            print_error "Не удалось загрузить последнюю версию с GitHub"
+            print_message "Детали ошибки:"
+            cat /tmp/git_clone.log | head -20
+            print_message ""
+            print_warning "Проверьте интернет-соединение и доступность GitHub"
             rm -rf "$temp_new_dir"
             return 1
         fi
+        
+        # Возвращаемся в оригинальную директорию
+        cd "$original_dir"
         
         # Запускаем updater из новой версии
         print_message "Запуск updater из новой версии..."
