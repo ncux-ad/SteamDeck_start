@@ -108,6 +108,9 @@ class SteamDeckGUI:
         
         # Запускаем обработчик прогресса
         self.root.after(100, self.process_progress_queue)
+        
+        # Автоматическая проверка обновлений при запуске (через 2 секунды)
+        self.root.after(2000, self.auto_check_updates)
     
     def get_version(self):
         """Получение версии из файла VERSION"""
@@ -1079,6 +1082,46 @@ class SteamDeckGUI:
         
         # Показываем индикатор загрузки
         self.show_progress("Проверка обновлений...")
+    
+    def auto_check_updates(self):
+        """Автоматическая проверка обновлений при запуске (тихая, без показа прогресса)"""
+        import subprocess
+        import threading
+        
+        def auto_check_thread():
+            try:
+                # Запускаем проверку обновлений
+                script_path = self.scripts_dir / "steamdeck_update.sh"
+                result = subprocess.run(
+                    ["bash", str(script_path), "check"],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.project_root)
+                )
+                
+                # Показываем результат только если есть обновление
+                if result.returncode == 0 and "Доступно обновление" in result.stdout:
+                    self.root.after(0, lambda: self.show_auto_update_notification(result))
+                
+            except Exception as e:
+                # Автопроверка не должна прерывать работу
+                pass
+        
+        # Запускаем в отдельном потоке
+        thread = threading.Thread(target=auto_check_thread)
+        thread.daemon = True
+        thread.start()
+    
+    def show_auto_update_notification(self, result):
+        """Показать уведомление об обновлении"""
+        dialog = tk.messagebox.askyesno(
+            "Доступно обновление!",
+            "Обнаружено новое обновление утилиты.\n\nОбновить сейчас?",
+            parent=self.root
+        )
+        
+        if dialog:
+            self.update_utility()
     
     def show_update_result(self, result, operation="check"):
         """Показать результат операций с обновлениями"""
