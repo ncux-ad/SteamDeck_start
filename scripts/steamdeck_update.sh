@@ -265,11 +265,6 @@ update_utility() {
         print_debug "Источник обновления: $new_dir"
         print_debug "Целевая директория: $target_dir"
         
-        # Останавливаем GUI
-        print_message "Остановка GUI (если запущен)..."
-        pkill -f "steamdeck_gui.py" 2>/dev/null || true
-        sleep 2  # Даем время GUI корректно закрыться
-        
         # Создаем резервную копию
         create_backup "$target_dir" ""
         
