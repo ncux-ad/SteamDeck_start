@@ -19,13 +19,6 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Загружаем конфигурацию если существует
-CONFIG_FILE="$PROJECT_ROOT/config.env"
-if [[ -f "$CONFIG_FILE" ]]; then
-    source "$CONFIG_FILE"
-    print_message "Загружена конфигурация из $CONFIG_FILE"
-fi
-
 # Определяем пользователя и пути установки
 DECK_USER="${STEAMDECK_USER:-deck}"
 DECK_HOME="${STEAMDECK_HOME:-/home/$DECK_USER}"
@@ -76,6 +69,13 @@ print_header() {
     echo -e "${BLUE}================================${NC}"
     echo
 }
+
+# Загружаем конфигурацию если существует
+CONFIG_FILE="$PROJECT_ROOT/config.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+    print_message "Загружена конфигурация из $CONFIG_FILE"
+fi
 
 # Функция для проверки интернет-соединения
 check_internet() {
