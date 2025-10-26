@@ -280,7 +280,9 @@ update_utility() {
         
         # Запускаем updater из новой версии
         print_message "Запуск updater из новой версии..."
-        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" "apply-update" "$PROJECT_ROOT"; then
+        print_debug "Источник: $temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh"
+        print_debug "Цель: $PROJECT_ROOT"
+        if bash "$temp_new_dir/steamdeck_latest/scripts/steamdeck_update.sh" apply-update "$PROJECT_ROOT"; then
             print_success "Обновление применено успешно"
             # Запускаем GUI из новой версии
             if [[ -f "$PROJECT_ROOT/scripts/steamdeck_gui.py" ]]; then
@@ -615,6 +617,12 @@ main() {
             check_internet || exit 1
             check_git || exit 1
             update_utility
+            ;;
+        "apply-update")
+            # Внутренняя команда для применения обновления
+            # Вызывается из новой версии для обновления старой
+            shift  # Убираем "apply-update" из аргументов
+            update_utility "apply-update" "$@"
             ;;
         "check")
             check_internet || exit 1
