@@ -1307,15 +1307,44 @@ rm -f "{restart_script}"
     
     def update_utility(self):
         """Обновление утилиты"""
-        result = messagebox.askyesno(
-            "Обновление утилиты",
-            "Обновить Steam Deck Enhancement Pack до последней версии?\n\n"
-            "Будет создана резервная копия текущей версии.\n"
-            "GUI будет перезапущен после обновления."
-        )
+        # Сначала проверяем наличие обновлений
+        import subprocess
         
-        if result:
-            self.run_update_with_dialog("steamdeck_update.sh", "update", "Обновление утилиты...")
+        try:
+            script_path = self.scripts_dir / "steamdeck_update.sh"
+            if not script_path.exists():
+                messagebox.showerror("Ошибка", f"Скрипт обновления не найден: {script_path}")
+                return
+            
+            # Проверяем обновления
+            check_result = subprocess.run(
+                ["bash", str(script_path), "check"],
+                capture_output=True,
+                text=True,
+                cwd=str(self.project_root)
+            )
+            
+            # Проверяем, есть ли обновления
+            if check_result.returncode == 0 and "Доступно обновление" in check_result.stdout:
+                # Есть обновления, спрашиваем подтверждение
+                result = messagebox.askyesno(
+                    "Обновление утилиты",
+                    "Доступна новая версия!\n\n"
+                    "Обновить Steam Deck Enhancement Pack до последней версии?\n\n"
+                    "Будет создана резервная копия текущей версии.\n"
+                    "GUI будет перезапущен после обновления."
+                )
+                
+                if result:
+                    self.run_update_with_dialog("steamdeck_update.sh", "update", "Обновление утилиты...")
+            else:
+                # Нет обновлений или ошибка
+                messagebox.showinfo(
+                    "Обновление",
+                    "У вас уже установлена последняя версия утилиты."
+                )
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при проверке обновлений: {e}")
     
     def rollback_update(self):
         """Откат последнего обновления"""
