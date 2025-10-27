@@ -85,6 +85,7 @@ if [[ -n "$RECENT_ERRORS" ]]; then
     echo ""
     echo "1. Размонтировать флешку:"
     echo "   sudo umount $ARKANE_PARTITION"
+    echo "   # На Steam Deck нужен sudo для umount"
     echo ""
     echo "2. Проверить файловую систему:"
     echo "   sudo fsck.ext4 -f -y $ARKANE_PARTITION"
