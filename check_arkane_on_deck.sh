@@ -6,20 +6,41 @@
 echo "=== Проверка флешки arkane на Steam Deck ==="
 echo ""
 
-# 1. Найти флешку
-echo "1. Поиск флешки arkane..."
+# 1. Найти флешку или SD карту
+echo "1. Поиск флешки/SD карты arkane..."
 ARKANE_PARTITION=$(lsblk -n -o NAME,LABEL,FSTYPE | grep -i "arkane" | awk '{print $1}' | tr -d '├─└─│ ')
 
+# Попробуем найти по LABEL или UUID
 if [[ -z "$ARKANE_PARTITION" ]]; then
-    echo "❌ Флешка arkane не найдена!"
+    # Поиск по другим параметрам
+    ARKANE_PARTITION=$(blkid | grep -i "arkane" | cut -d: -f1 | sed 's/\/dev\///')
+fi
+
+if [[ -z "$ARKANE_PARTITION" ]]; then
+    echo "❌ Флешка/SD карта arkane не найдена!"
     echo ""
     echo "Доступные устройства:"
-    lsblk -o NAME,LABEL,FSTYPE
+    lsblk -o NAME,LABEL,FSTYPE,UUID | grep -v "^NAME"
+    echo ""
+    echo "На Steam Deck:"
+    echo "- mmcblk0p1, mmcblk1p1 - SD карты"
+    echo "- sda1, sdb1 - USB флешки"
+    echo "- nvme0n1p1 - внутренний SSD"
     exit 1
 fi
 
 ARKANE_PARTITION="/dev/${ARKANE_PARTITION}"
-echo "✅ Найдена флешка: $ARKANE_PARTITION"
+echo "✅ Найдено устройство arkane: $ARKANE_PARTITION"
+
+# Определить тип устройства
+if echo "$ARKANE_PARTITION" | grep -q "mmcblk"; then
+    DEVICE_TYPE="SD карта"
+elif echo "$ARKANE_PARTITION" | grep -q "sda\|sdb"; then
+    DEVICE_TYPE="USB флешка"
+else
+    DEVICE_TYPE="Внешнее устройство"
+fi
+echo "Тип устройства: $DEVICE_TYPE"
 echo ""
 
 # 2. Проверить монтирование
